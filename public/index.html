@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrendHub — SNS 트렌드 한눈에</title>
+<meta name="description" content="유튜브·쇼츠·틱톡·스레드·X 핫토픽을 로그인 없이 한 화면에서. 실시간 공유 게시판 포함.">
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🔥</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🔥</span>
+    <div>
+      <h1>TrendHub</h1>
+      <p class="tagline">유튜브 · 쇼츠 · 틱톡 · 스레드 · X 트렌드를 한눈에</p>
+    </div>
+  </div>
+  <div class="status">
+    <span class="live-dot" id="liveDot"></span>
+    <span id="liveText">연결 중…</span>
+    <span class="sep">·</span>
+    <span id="viewerCount">-</span>명 접속
+    <span class="sep">·</span>
+    <span id="updatedAt">-</span>
+    <button id="refreshBtn" title="트렌드 지금 새로고침">⟳ 새로고침</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="all">전체</button>
+  <button class="tab" data-tab="google">🔍 핫토픽</button>
+  <button class="tab" data-tab="youtube">▶ 유튜브</button>
+  <button class="tab" data-tab="shorts">⚡ 쇼츠</button>
+  <button class="tab" data-tab="tiktok">🎵 틱톡</button>
+  <button class="tab" data-tab="x">𝕏 트렌드</button>
+  <button class="tab" data-tab="threads">@ 스레드</button>
+  <button class="tab" data-tab="community">💬 실시간 공유</button>
+</nav>
+
+<main class="grid" id="grid">
+  <section class="card" data-platform="google">
+    <h2><span class="chip google">🔍</span> 실시간 핫토픽 <small>Google Trends · 검색 급상승</small></h2>
+    <ol class="list" id="list-google"><li class="loading">불러오는 중…</li></ol>
+  </section>
+
+  <section class="card" data-platform="youtube">
+    <h2><span class="chip youtube">▶</span> 유튜브 인기 급상승 <small>조회수·채널 포함</small></h2>
+    <ol class="list" id="list-youtube"><li class="loading">불러오는 중…</li></ol>
+  </section>
+
+  <section class="card" data-platform="shorts">
+    <h2><span class="chip shorts">⚡</span> 쇼츠 트렌딩 <small>YouTube Shorts</small></h2>
+    <ol class="list" id="list-shorts"><li class="loading">불러오는 중…</li></ol>
+  </section>
+
+  <section class="card" data-platform="tiktok">
+    <h2><span class="chip tiktok">🎵</span> 틱톡 인기 영상 <small>재생수·좋아요 포함</small></h2>
+    <ol class="list" id="list-tiktok"><li class="loading">불러오는 중…</li></ol>
+  </section>
+
+  <section class="card" data-platform="x">
+    <h2><span class="chip x">𝕏</span> X 실시간 트렌드 <small>대한민국</small></h2>
+    <ol class="list" id="list-x"><li class="loading">불러오는 중…</li></ol>
+  </section>
+
+  <section class="card" data-platform="threads">
+    <h2><span class="chip threads">@</span> 스레드 핫키워드 <small>지금 뜨는 키워드로 바로 검색</small></h2>
+    <p class="note">스레드는 공개 트렌드 API가 없어, 실시간 핫키워드를 스레드 검색으로 연결해 드려요. 발견한 인기 글은 아래 공유 게시판에 올려주세요!</p>
+    <ol class="list" id="list-threads"><li class="loading">불러오는 중…</li></ol>
+  </section>
+
+  <section class="card wide" data-platform="community">
+    <h2><span class="chip community">💬</span> 실시간 공유 게시판 <small>발견한 핫 콘텐츠를 모두와 공유 — 즉시 반영</small></h2>
+    <form id="shareForm" class="share-form">
+      <input id="fNick" type="text" placeholder="닉네임 (선택)" maxlength="20">
+      <select id="fPlatform">
+        <option value="youtube">유튜브</option>
+        <option value="shorts">쇼츠</option>
+        <option value="tiktok">틱톡</option>
+        <option value="threads">스레드</option>
+        <option value="x">X</option>
+        <option value="etc">기타</option>
+      </select>
+      <input id="fTitle" type="text" placeholder="제목 / 키워드 (필수)" maxlength="120" required>
+      <input id="fUrl" type="url" placeholder="링크 (선택)" maxlength="500">
+      <button type="submit">공유하기</button>
+    </form>
+    <ul class="list posts" id="list-posts"><li class="loading">아직 공유된 글이 없어요. 첫 글을 올려보세요!</li></ul>
+  </section>
+</main>
+
+<footer>
+  <p>로그인·API 키 없이 공개 데이터만 수집합니다 · 10분마다 자동 갱신 · 출처: Google Trends RSS, YouTube, trends24, tikwm</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
