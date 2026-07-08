@@ -282,3 +282,10 @@ async function init() {
 }
 
 init();
+
+// PWA: 서비스워커 등록 (홈 화면 설치 + 오프라인 셸)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
