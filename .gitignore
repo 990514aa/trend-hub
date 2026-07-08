@@ -2,3 +2,4 @@ data/
 .claude/
 .DS_Store
 node_modules/
+.render-deploy-hook
