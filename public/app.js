@@ -2,6 +2,8 @@
 
 const $ = (sel) => document.querySelector(sel);
 
+let currentRegion = localStorage.getItem('region') || 'KR';
+
 const PLATFORM_LABEL = {
   youtube: '▶ 유튜브', shorts: '⚡ 쇼츠', tiktok: '🎵 틱톡',
   threads: '@ 스레드', x: '𝕏', etc: '기타', google: '🔍 핫토픽',
@@ -133,8 +135,26 @@ function renderTrends(trends, updatedAt) {
   for (const key of ['google', 'youtube', 'shorts', 'tiktok', 'x', 'threads']) {
     renderList(key, trends[key] || { items: [], error: null });
   }
-  if (updatedAt) $('#updatedAt').textContent = `갱신 ${fmtTime(updatedAt)}`;
+  $('#updatedAt').textContent = updatedAt ? `갱신 ${fmtTime(updatedAt)}` : '수집 중…';
 }
+
+async function loadRegion(region) {
+  currentRegion = region;
+  localStorage.setItem('region', region);
+  document.querySelectorAll('.region').forEach((b) =>
+    b.classList.toggle('active', b.dataset.region === region));
+  document.querySelectorAll('.list:not(.posts)').forEach((ol) => {
+    ol.textContent = '';
+    ol.appendChild(el('li', { class: 'loading', text: '불러오는 중…' }));
+  });
+  const t = await fetch(`/api/trends?region=${region}`).then((r) => r.json()).catch(() => null);
+  if (t && t.region === currentRegion) renderTrends(t.trends, t.updatedAt);
+}
+
+$('#regionSwitch').addEventListener('click', (e) => {
+  const btn = e.target.closest('.region');
+  if (btn && btn.dataset.region !== currentRegion) loadRegion(btn.dataset.region);
+});
 
 function renderPost(post, prepend = false, isNew = false) {
   const ul = $('#list-posts');
@@ -195,7 +215,7 @@ $('#refreshBtn').addEventListener('click', async () => {
   const btn = $('#refreshBtn');
   btn.disabled = true;
   try {
-    const res = await fetch('/api/refresh', { method: 'POST' });
+    const res = await fetch(`/api/refresh?region=${currentRegion}`, { method: 'POST' });
     const json = await res.json();
     toast(res.ok ? '트렌드를 새로 가져오는 중…' : json.error);
   } catch {
@@ -218,7 +238,8 @@ function connectSSE() {
     $('#viewerCount').textContent = JSON.parse(e.data).count;
   });
   es.addEventListener('trends', (e) => {
-    const { trends, updatedAt } = JSON.parse(e.data);
+    const { region, trends, updatedAt } = JSON.parse(e.data);
+    if (region !== currentRegion) return;
     renderTrends(trends, updatedAt);
     toast('트렌드가 갱신됐어요 ✨');
   });
@@ -238,9 +259,11 @@ function connectSSE() {
 
 async function init() {
   connectSSE();
+  document.querySelectorAll('.region').forEach((b) =>
+    b.classList.toggle('active', b.dataset.region === currentRegion));
   try {
     const [t, p] = await Promise.all([
-      fetch('/api/trends').then((r) => r.json()),
+      fetch(`/api/trends?region=${currentRegion}`).then((r) => r.json()),
       fetch('/api/posts').then((r) => r.json()),
     ]);
     renderTrends(t.trends, t.updatedAt);
@@ -251,11 +274,11 @@ async function init() {
   } catch {
     toast('초기 데이터를 불러오지 못했어요. 새로고침해 주세요.');
   }
-  // 서버가 켜진 직후라면 첫 수집이 끝나기 전일 수 있음 → 잠시 후 한 번 더
+  // 서버가 켜진 직후라면 해당 지역 첫 수집이 끝나기 전일 수 있음 → 잠시 후 한 번 더
   setTimeout(async () => {
-    const t = await fetch('/api/trends').then((r) => r.json()).catch(() => null);
-    if (t?.updatedAt) renderTrends(t.trends, t.updatedAt);
-  }, 6000);
+    const t = await fetch(`/api/trends?region=${currentRegion}`).then((r) => r.json()).catch(() => null);
+    if (t?.updatedAt && t.region === currentRegion) renderTrends(t.trends, t.updatedAt);
+  }, 8000);
 }
 
 init();

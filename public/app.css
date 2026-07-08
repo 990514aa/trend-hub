@@ -34,6 +34,19 @@ body {
 h1 { font-size: 24px; letter-spacing: -0.5px; }
 .tagline { color: var(--muted); font-size: 13px; }
 
+.region-switch {
+  display: flex; gap: 4px;
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 10px; padding: 4px;
+}
+.region {
+  background: transparent; color: var(--muted);
+  border: none; border-radius: 7px;
+  padding: 6px 12px; cursor: pointer; font-size: 13px;
+}
+.region.active { background: #232c3f; color: var(--text); font-weight: 700; }
+.region:hover:not(.active) { color: var(--text); }
+
 .status {
   display: flex; align-items: center; gap: 8px;
   color: var(--muted); font-size: 13px;

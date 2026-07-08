@@ -26,21 +26,32 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
 
+// --------------------------------------------------------------- regions ---
+
+const REGIONS = {
+  KR: { label: '한국', geo: 'KR', t24: 'korea', tikwm: 'KR', gl: 'KR' },
+  US: { label: '미국', geo: 'US', t24: 'united-states', tikwm: 'US', gl: 'US' },
+  JP: { label: '일본', geo: 'JP', t24: 'japan', tikwm: 'JP', gl: 'JP' },
+};
+const REGION_CODES = Object.keys(REGIONS);
+
 // ---------------------------------------------------------------- state ----
 
-const state = {
-  trends: {
+function emptyTrends() {
+  return {
     google: { items: [], error: null },
     youtube: { items: [], error: null },
     shorts: { items: [], error: null },
     tiktok: { items: [], error: null },
     x: { items: [], error: null },
     threads: { items: [], error: null },
-  },
-  updatedAt: null,
-  refreshing: false,
-};
-let lastManualRefresh = 0;
+  };
+}
+
+const state = {};
+for (const code of REGION_CODES) {
+  state[code] = { trends: emptyTrends(), updatedAt: null, refreshing: false, lastManualRefresh: 0 };
+}
 
 let posts = [];
 try {
@@ -83,8 +94,8 @@ function decodeEntities(s) {
 }
 
 // 구글 트렌드 공식 RSS — 실시간 급상승 검색어
-async function fetchGoogleTrends() {
-  const xml = await fetchText('https://trends.google.com/trending/rss?geo=KR');
+async function fetchGoogleTrends(geo) {
+  const xml = await fetchText(`https://trends.google.com/trending/rss?geo=${geo}`);
   const items = [];
   for (const chunk of xml.split('<item>').slice(1)) {
     const pick = (tag) => {
@@ -120,12 +131,13 @@ function parseKoViews(text) {
   return Math.round(n * mult);
 }
 
-async function ytSearch(query, params) {
+async function ytSearch(query, params, gl) {
   const res = await fetch('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
     body: JSON.stringify({
-      context: { client: { clientName: 'WEB', clientVersion: '2.20260706.00.00', gl: 'KR', hl: 'ko' } },
+      // hl은 ko 고정: 조회수 문자열을 한국어 형식으로 통일해 파싱을 단순화
+      context: { client: { clientName: 'WEB', clientVersion: '2.20260706.00.00', gl, hl: 'ko' } },
       query, params,
     }),
     signal: AbortSignal.timeout(15000),
@@ -172,12 +184,12 @@ async function ytSearch(query, params) {
   return { videos, shorts };
 }
 
-async function fetchYouTubeByKeywords(keywords, shortsMode) {
+async function fetchYouTubeByKeywords(keywords, shortsMode, gl) {
   // 영상: '이번 주 조회수순' 필터 검색 / 쇼츠: 일반 검색의 쇼츠 선반에서 수집
   const results = await Promise.allSettled(
     keywords.map((k) => {
       const q = k.replace(/^#/, '');
-      return ytSearch(q, shortsMode ? undefined : YT_SORT_VIEWS_WEEK);
+      return ytSearch(q, shortsMode ? undefined : YT_SORT_VIEWS_WEEK, gl);
     }),
   );
   const seen = new Set();
@@ -196,9 +208,9 @@ async function fetchYouTubeByKeywords(keywords, shortsMode) {
   return items.slice(0, 20);
 }
 
-// trends24.in — X(트위터) 한국 실시간 트렌드 (가장 최신 카드 1개)
-async function fetchXTrends() {
-  const html = await fetchText('https://trends24.in/korea/');
+// trends24.in — X(트위터) 실시간 트렌드 (가장 최신 카드 1개)
+async function fetchXTrends(path) {
+  const html = await fetchText(`https://trends24.in/${path}/`);
   const list = html.match(/<ol class=trend-card__list>([\s\S]*?)<\/ol>/);
   if (!list) throw new Error('trend list not found');
   const items = [];
@@ -216,8 +228,8 @@ async function fetchXTrends() {
 }
 
 // tikwm 공개 피드 — 틱톡 인기 영상 (키 불필요)
-async function fetchTikTok() {
-  const res = await fetch('https://www.tikwm.com/api/feed/list?region=KR&count=20', {
+async function fetchTikTok(region) {
+  const res = await fetch(`https://www.tikwm.com/api/feed/list?region=${region}&count=20`, {
     headers: { 'User-Agent': UA },
     signal: AbortSignal.timeout(15000),
   });
@@ -253,25 +265,27 @@ function buildThreadsLinks(googleItems, xItems) {
 
 // ------------------------------------------------------------- refresh -----
 
-async function refreshAll(reason) {
-  if (state.refreshing) return;
-  state.refreshing = true;
-  console.log(`[refresh] start (${reason})`);
+async function refreshRegion(code, reason) {
+  const region = REGIONS[code];
+  const st = state[code];
+  if (st.refreshing) return;
+  st.refreshing = true;
+  console.log(`[refresh:${code}] start (${reason})`);
 
   const set = (key, result, map = (v) => v) => {
     if (result.status === 'fulfilled') {
-      state.trends[key] = { items: map(result.value), error: null };
+      st.trends[key] = { items: map(result.value), error: null };
     } else {
-      state.trends[key].error = String(result.reason?.message || result.reason);
-      console.warn(`[refresh] ${key} failed:`, state.trends[key].error);
+      st.trends[key].error = String(result.reason?.message || result.reason);
+      console.warn(`[refresh:${code}] ${key} failed:`, st.trends[key].error);
     }
   };
 
   // 1차: 핫토픽 소스 (유튜브 검색의 시드 키워드로도 사용)
   const [google, x, tiktok] = await Promise.allSettled([
-    fetchGoogleTrends(),
-    fetchXTrends(),
-    fetchTikTok(),
+    fetchGoogleTrends(region.geo),
+    fetchXTrends(region.t24),
+    fetchTikTok(region.tikwm),
   ]);
   set('google', google);
   set('x', x);
@@ -279,26 +293,33 @@ async function refreshAll(reason) {
 
   // 2차: 핫키워드 기반 유튜브 인기 영상/쇼츠
   const keywords = [
-    ...state.trends.google.items.map((i) => i.title),
-    ...state.trends.x.items.map((i) => i.title),
+    ...st.trends.google.items.map((i) => i.title),
+    ...st.trends.x.items.map((i) => i.title),
   ].slice(0, 6);
-  if (!keywords.length) keywords.push('오늘 인기', '이슈');
+  if (!keywords.length) keywords.push('trending');
 
   const [ytVideos, ytShorts] = await Promise.allSettled([
-    fetchYouTubeByKeywords(keywords, false),
-    fetchYouTubeByKeywords(keywords, true),
+    fetchYouTubeByKeywords(keywords, false, region.gl),
+    fetchYouTubeByKeywords(keywords, true, region.gl),
   ]);
   set('youtube', ytVideos);
   set('shorts', ytShorts);
-  state.trends.threads = {
-    items: buildThreadsLinks(state.trends.google.items, state.trends.x.items),
+  st.trends.threads = {
+    items: buildThreadsLinks(st.trends.google.items, st.trends.x.items),
     error: null,
   };
 
-  state.updatedAt = new Date().toISOString();
-  state.refreshing = false;
-  console.log(`[refresh] done — google:${state.trends.google.items.length} yt:${state.trends.youtube.items.length} shorts:${state.trends.shorts.items.length} x:${state.trends.x.items.length} tiktok:${state.trends.tiktok.items.length}`);
-  broadcast('trends', { trends: state.trends, updatedAt: state.updatedAt });
+  st.updatedAt = new Date().toISOString();
+  st.refreshing = false;
+  console.log(`[refresh:${code}] done — google:${st.trends.google.items.length} yt:${st.trends.youtube.items.length} shorts:${st.trends.shorts.items.length} x:${st.trends.x.items.length} tiktok:${st.trends.tiktok.items.length}`);
+  broadcast('trends', { region: code, trends: st.trends, updatedAt: st.updatedAt });
+}
+
+// 순차 갱신: 요청 폭주 방지 (KR 먼저 — 기본 지역이라 첫 화면이 빨라짐)
+async function refreshAll(reason) {
+  for (const code of REGION_CODES) {
+    await refreshRegion(code, reason).catch((e) => console.warn(`[refresh:${code}]`, e));
+  }
 }
 
 // --------------------------------------------------------------- server ----
@@ -336,7 +357,15 @@ const server = http.createServer(async (req, res) => {
 
   // --- API ---
   if (url.pathname === '/api/trends') {
-    return json(res, 200, { trends: state.trends, updatedAt: state.updatedAt });
+    const code = REGION_CODES.includes(url.searchParams.get('region')) ? url.searchParams.get('region') : 'KR';
+    const st = state[code];
+    return json(res, 200, {
+      region: code,
+      regions: Object.fromEntries(REGION_CODES.map((c) => [c, REGIONS[c].label])),
+      trends: st.trends,
+      updatedAt: st.updatedAt,
+      refreshing: st.refreshing,
+    });
   }
 
   if (url.pathname === '/api/posts' && req.method === 'GET') {
@@ -368,12 +397,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/refresh' && req.method === 'POST') {
+    const code = REGION_CODES.includes(url.searchParams.get('region')) ? url.searchParams.get('region') : 'KR';
+    const st = state[code];
     const now = Date.now();
-    if (now - lastManualRefresh < MANUAL_REFRESH_COOLDOWN) {
+    if (now - st.lastManualRefresh < MANUAL_REFRESH_COOLDOWN) {
       return json(res, 429, { error: '새로고침은 1분에 한 번만 가능해요.' });
     }
-    lastManualRefresh = now;
-    refreshAll('manual');
+    st.lastManualRefresh = now;
+    refreshRegion(code, 'manual');
     return json(res, 200, { ok: true });
   }
 
