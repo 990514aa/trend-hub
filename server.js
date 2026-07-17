@@ -22,6 +22,7 @@ const REFRESH_MS = 10 * 60 * 1000;        // 자동 갱신 주기 10분
 const MANUAL_REFRESH_COOLDOWN = 60 * 1000; // 수동 새로고침 최소 간격
 const DATA_DIR = path.join(__dirname, 'data');
 const POSTS_FILE = path.join(DATA_DIR, 'posts.json');
+const REACTIONS_FILE = path.join(DATA_DIR, 'reactions.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
@@ -50,7 +51,7 @@ function emptyTrends() {
 
 const state = {};
 for (const code of REGION_CODES) {
-  state[code] = { trends: emptyTrends(), updatedAt: null, refreshing: false, lastManualRefresh: 0 };
+  state[code] = { trends: emptyTrends(), updatedAt: null, refreshing: false, lastManualRefresh: 0, rankSnap: null };
 }
 
 let posts = [];
@@ -63,6 +64,29 @@ function savePosts() {
   fs.mkdir(DATA_DIR, { recursive: true }, () => {
     fs.writeFile(POSTS_FILE, JSON.stringify(posts, null, 1), () => {});
   });
+}
+
+// 반응(👍) 저장소: { rkey: count }. reactedBy는 메모리 전용(IP당 1회 제한, 재시작 시 초기화).
+let reactions = {};
+try {
+  reactions = JSON.parse(fs.readFileSync(REACTIONS_FILE, 'utf8'));
+  if (!reactions || typeof reactions !== 'object') reactions = {};
+} catch { reactions = {}; }
+const reactedBy = new Map(); // rkey -> Set(ip)
+
+let saveReactionsTimer = null;
+function saveReactions() {
+  clearTimeout(saveReactionsTimer);
+  saveReactionsTimer = setTimeout(() => {
+    fs.mkdir(DATA_DIR, { recursive: true }, () => {
+      fs.writeFile(REACTIONS_FILE, JSON.stringify(reactions), () => {});
+    });
+  }, 1000);
+}
+
+function clientIp(req) {
+  return (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || req.socket.remoteAddress || 'unknown';
 }
 
 // ------------------------------------------------------------------ SSE ----
@@ -263,6 +287,75 @@ function buildThreadsLinks(googleItems, xItems) {
   }));
 }
 
+// --------------------------------------------------- 후처리(순위·크로스) ----
+
+const SECTION_KEYS = ['google', 'youtube', 'shorts', 'tiktok', 'x', 'threads'];
+const RANK_SECTIONS = ['google', 'x']; // 순위 변동은 키워드가 안정적인 섹션에만 (영상은 매번 바뀌어 노이즈)
+
+const normKw = (s) => String(s || '').toLowerCase().replace(/^#/, '').replace(/[\s#_]/g, '');
+const stableId = (it) => it.id || it.title;
+
+// 각 항목에 rkey(반응 키), rankDelta(순위 변동), cross(교차 플랫폼)를 붙인다.
+function postProcess(code, st) {
+  const prev = st.rankSnap;
+  const newSnap = {};
+
+  for (const section of SECTION_KEYS) {
+    const items = st.trends[section].items;
+    const map = new Map();
+    items.forEach((it, i) => {
+      const sid = stableId(it);
+      map.set(sid, i);
+      it.rkey = `${code}:${section}:${sid}`;
+      if (RANK_SECTIONS.includes(section) && prev && prev[section]) {
+        const p = prev[section].get(sid);
+        it.rankDelta = p === undefined ? 'new' : p - i;
+      } else {
+        it.rankDelta = null;
+      }
+    });
+    newSnap[section] = map;
+  }
+  st.rankSnap = newSnap;
+
+  // 교차 플랫폼: 같은 키워드가 몇 개 플랫폼에서 동시에 뜨는지
+  const kwMap = new Map(); // norm -> Set(platform)
+  const add = (display, plat) => {
+    const n = normKw(display);
+    if (n.length < 2) return;
+    if (!kwMap.has(n)) kwMap.set(n, new Set());
+    kwMap.get(n).add(plat);
+  };
+  st.trends.google.items.forEach((it) => add(it.title, 'google'));
+  st.trends.x.items.forEach((it) => add(it.title, 'x'));
+  ['youtube', 'shorts'].forEach((sec) =>
+    st.trends[sec].items.forEach((it) => { if (it.keyword) add(it.keyword, 'youtube'); }));
+  st.trends.tiktok.items.forEach((it) => {
+    const nt = normKw(it.title);
+    for (const [n, plats] of kwMap) if (nt.includes(n)) plats.add('tiktok');
+  });
+
+  const crossFor = (display) => {
+    const plats = kwMap.get(normKw(display));
+    return plats && plats.size >= 3 ? [...plats] : null; // 3개 이상이면 "장악"
+  };
+  st.trends.google.items.forEach((it) => { it.cross = crossFor(it.title); });
+  st.trends.x.items.forEach((it) => { it.cross = crossFor(it.title); });
+  ['youtube', 'shorts'].forEach((sec) =>
+    st.trends[sec].items.forEach((it) => { it.cross = it.keyword ? crossFor(it.keyword) : null; }));
+}
+
+// 현재 화면에 뜬 항목들의 반응 수만 추려서 반환 (payload 최소화)
+function reactionsForRegion(st) {
+  const out = {};
+  for (const section of SECTION_KEYS) {
+    for (const it of st.trends[section].items) {
+      if (it.rkey && reactions[it.rkey]) out[it.rkey] = reactions[it.rkey];
+    }
+  }
+  return out;
+}
+
 // ------------------------------------------------------------- refresh -----
 
 async function refreshRegion(code, reason) {
@@ -309,10 +402,12 @@ async function refreshRegion(code, reason) {
     error: null,
   };
 
+  postProcess(code, st);
+
   st.updatedAt = new Date().toISOString();
   st.refreshing = false;
   console.log(`[refresh:${code}] done — google:${st.trends.google.items.length} yt:${st.trends.youtube.items.length} shorts:${st.trends.shorts.items.length} x:${st.trends.x.items.length} tiktok:${st.trends.tiktok.items.length}`);
-  broadcast('trends', { region: code, trends: st.trends, updatedAt: st.updatedAt });
+  broadcast('trends', { region: code, trends: st.trends, updatedAt: st.updatedAt, reactions: reactionsForRegion(st) });
 }
 
 // 순차 갱신: 요청 폭주 방지 (KR 먼저 — 기본 지역이라 첫 화면이 빨라짐)
@@ -367,11 +462,17 @@ const server = http.createServer(async (req, res) => {
       trends: st.trends,
       updatedAt: st.updatedAt,
       refreshing: st.refreshing,
+      reactions: reactionsForRegion(st),
     });
   }
 
   if (url.pathname === '/api/posts' && req.method === 'GET') {
-    return json(res, 200, { posts });
+    const postReactions = {};
+    for (const p of posts) {
+      const k = `post:${p.id}`;
+      if (reactions[k]) postReactions[k] = reactions[k];
+    }
+    return json(res, 200, { posts, reactions: postReactions });
   }
 
   if (url.pathname === '/api/posts' && req.method === 'POST') {
@@ -394,6 +495,30 @@ const server = http.createServer(async (req, res) => {
       broadcast('post', post);
       return json(res, 200, { ok: true, post });
     } catch (e) {
+      return json(res, 400, { error: '잘못된 요청입니다.' });
+    }
+  }
+
+  if (url.pathname === '/api/react' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req, 1024));
+      const key = String(body.key || '').slice(0, 200);
+      // rkey는 "region:section:..." 또는 "post:..." 형태만 허용
+      if (!/^([A-Z]{2}:[a-z]+:.+|post:.+)$/.test(key)) {
+        return json(res, 400, { error: 'invalid key' });
+      }
+      const ip = clientIp(req);
+      let set = reactedBy.get(key);
+      if (!set) { set = new Set(); reactedBy.set(key, set); }
+      if (set.has(ip)) {
+        return json(res, 200, { ok: true, count: reactions[key] || 0, already: true });
+      }
+      set.add(ip);
+      reactions[key] = (reactions[key] || 0) + 1;
+      saveReactions();
+      broadcast('react', { key, count: reactions[key] });
+      return json(res, 200, { ok: true, count: reactions[key] });
+    } catch {
       return json(res, 400, { error: '잘못된 요청입니다.' });
     }
   }

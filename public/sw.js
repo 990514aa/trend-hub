@@ -1,5 +1,5 @@
 /* TrendHub 서비스워커 — 앱 셸은 캐시 우선, API는 네트워크 우선(오프라인 시 마지막 데이터) */
-const CACHE = 'trendhub-v1';
+const CACHE = 'trendhub-v2';
 const SHELL = ['/', '/app.css', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

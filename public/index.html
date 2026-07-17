@@ -37,11 +37,19 @@
     <span class="sep">·</span>
     <span id="updatedAt">-</span>
     <button id="refreshBtn" title="트렌드 지금 새로고침">⟳ 새로고침</button>
+    <button id="themeBtn" title="라이트/다크 전환" aria-label="테마 전환">🌙</button>
   </div>
 </header>
 
+<div class="searchbar">
+  <span class="search-icon">🔍</span>
+  <input id="searchBox" type="search" placeholder="모든 플랫폼에서 키워드 검색 (예: 손흥민)" autocomplete="off">
+  <button id="searchClear" class="hidden" aria-label="검색 지우기">✕</button>
+</div>
+
 <nav class="tabs" id="tabs">
   <button class="tab active" data-tab="all">전체</button>
+  <button class="tab" data-tab="favorites">⭐ 즐겨찾기 <span class="fav-count" id="favCount">0</span></button>
   <button class="tab" data-tab="google">🔍 핫토픽</button>
   <button class="tab" data-tab="youtube">▶ 유튜브</button>
   <button class="tab" data-tab="shorts">⚡ 쇼츠</button>
@@ -52,6 +60,11 @@
 </nav>
 
 <main class="grid" id="grid">
+  <section class="card wide" data-platform="favorites">
+    <h2><span class="chip favorites">⭐</span> 즐겨찾기 <small>별표한 키워드 — 이 기기에 저장 (로그인 불필요)</small></h2>
+    <ol class="list" id="list-favs"><li class="loading">트렌드 옆의 ☆ 를 눌러 즐겨찾기에 담아보세요.</li></ol>
+  </section>
+
   <section class="card" data-platform="google">
     <h2><span class="chip google">🔍</span> 실시간 핫토픽 <small>Google Trends · 검색 급상승</small></h2>
     <ol class="list" id="list-google"><li class="loading">불러오는 중…</li></ol>
