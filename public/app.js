@@ -303,10 +303,18 @@ function rerenderTrends() {
 }
 
 function acceptData(t) {
-  lastData = { trends: t.trends, updatedAt: t.updatedAt };
+  lastData = { trends: t.trends, updatedAt: t.updatedAt, region: t.region || currentRegion };
   if (t.reactions) reactionCounts = { ...reactionCounts, ...t.reactions };
   renderTrends(t.trends, t.updatedAt);
+  for (const fn of dataListeners) { try { fn(lastData); } catch { /* 구독자 오류는 무시 */ } }
 }
+
+// 3D 해부도(xray.js) 등 부가 뷰가 붙을 수 있는 최소 브리지
+const dataListeners = new Set();
+window.TrendHub = {
+  getData: () => lastData,
+  onData(fn) { dataListeners.add(fn); return () => dataListeners.delete(fn); },
+};
 
 // --------------------------------------------------------------- search ----
 

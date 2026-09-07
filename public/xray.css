@@ -1,0 +1,253 @@
+/* ================================================================
+   TrendHub 3D 해부도 — Exploded / X-ray / Cutaway
+   외부 라이브러리 없음: CSS 3D transform + clip-path 만 사용
+   ================================================================ */
+
+.xr-open-btn {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 13px;
+  color: var(--text);
+}
+.xr-open-btn:hover { border-color: var(--muted); }
+
+.xr-overlay[hidden] { display: none; }
+.xr-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; flex-direction: column;
+  background:
+    radial-gradient(900px 600px at 50% 12%, rgba(37, 244, 238, .10), transparent 60%),
+    radial-gradient(700px 500px at 20% 90%, rgba(182, 120, 255, .10), transparent 60%),
+    var(--bg);
+  animation: xr-fade .22s ease;
+  overscroll-behavior: contain;
+}
+@keyframes xr-fade { from { opacity: 0 } to { opacity: 1 } }
+
+/* ---------------- 무대 ---------------- */
+.xr-stage {
+  flex: 1; min-height: 0; position: relative;
+  perspective: 1500px; perspective-origin: 50% 50%;
+  touch-action: none; cursor: grab; overflow: hidden;
+}
+.xr-stage.dragging { cursor: grabbing; }
+
+.xr-deck {
+  position: absolute; left: 50%; top: 50%;
+  width: 0; height: 0;
+  transform-style: preserve-3d;
+  transform:
+    translate(var(--pan-x, 0px), var(--pan-y, 0px))
+    translateZ(var(--dolly, -60px))
+    rotateX(var(--rx, 58deg)) rotateZ(var(--rz, -34deg))
+    scale(var(--zoom, 1));
+  transition: transform .5s cubic-bezier(.22, .68, .3, 1);
+}
+.xr-deck.free { transition: none; }
+
+/* ---------------- 레이어(=플랫폼 섹션) ---------------- */
+.xr-layer {
+  --w: 480px; --h: 268px;
+  position: absolute;
+  left: calc(var(--w) / -2); top: calc(var(--h) / -2);
+  width: var(--w); height: var(--h);
+  transform-style: preserve-3d;
+  transform: translate3d(0, 0, calc(var(--i) * var(--gap, 14px) * var(--spread, 1)));
+  transition: transform .55s cubic-bezier(.22, .68, .3, 1), opacity .3s;
+}
+.xr-layer.dimmed { opacity: .18; }
+
+/* 두께(압출) — 얇은 슬라이스를 Z로 쌓아 입체 옆면을 만든다 */
+.xr-slab {
+  position: absolute; inset: 0;
+  background: var(--tint-weak);
+  border: 1px solid var(--tint);
+  border-radius: 14px;
+  transform: translateZ(calc(var(--s) * -2px));
+  opacity: .55;
+  clip-path: var(--clip, none);
+}
+
+/* 윗면(콘텐츠) */
+.xr-plate {
+  position: absolute; inset: 0;
+  border-radius: 14px;
+  background: linear-gradient(160deg, var(--card) 0%, color-mix(in srgb, var(--card) 82%, var(--tint)) 100%);
+  border: 1px solid var(--tint);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06);
+  overflow: hidden;
+  clip-path: var(--clip, none);
+  transition: clip-path .45s ease, background .3s, opacity .3s;
+}
+
+.xr-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid var(--tint);
+  background: linear-gradient(90deg, var(--tint-weak), transparent 70%);
+}
+.xr-head .xr-chip {
+  width: 26px; height: 26px; border-radius: 8px;
+  display: grid; place-items: center; font-size: 14px;
+  background: var(--tint-weak); border: 1px solid var(--tint); color: var(--tint-solid);
+}
+.xr-head b { font-size: 14px; letter-spacing: -.2px; }
+.xr-head .xr-count { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+.xr-rows { padding: 6px 12px 10px; display: grid; gap: 5px; }
+.xr-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.xr-row .xr-rank {
+  width: 18px; height: 18px; flex: none; border-radius: 5px;
+  display: grid; place-items: center; font-size: 10px; font-weight: 700;
+  background: var(--tint-weak); color: var(--tint-solid);
+}
+.xr-row .xr-t {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text);
+}
+.xr-row .xr-v { flex: none; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.xr-bar {
+  flex: none; width: 62px; height: 5px; border-radius: 3px;
+  background: var(--tint-weak); overflow: hidden;
+}
+.xr-bar i { display: block; height: 100%; width: var(--p, 10%); background: var(--tint-solid); opacity: .85; }
+.xr-empty { padding: 8px 2px; font-size: 12px; color: var(--muted); }
+
+/* 와이어프레임 격자 — X-ray 에서만 보임 */
+.xr-grid {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background-image:
+    linear-gradient(to right, var(--tint) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--tint) 1px, transparent 1px);
+  background-size: 32px 32px;
+  transition: opacity .35s;
+  clip-path: var(--clip, none);
+}
+
+/* 절단면 해칭 — Cutaway 에서 잘린 단면을 표시 */
+.xr-cut { position: absolute; inset: 0; pointer-events: none; }
+.xr-cut i {
+  position: absolute; opacity: 0; transition: opacity .3s;
+  background: repeating-linear-gradient(45deg,
+    var(--tint-solid) 0 2px, transparent 2px 6px);
+  outline: 1px solid var(--tint-solid);
+}
+.xr-cut .v { left: var(--cw, 100%); top: 0; width: 4px; height: var(--ch, 0); }
+.xr-cut .h { left: var(--cw, 100%); top: var(--ch, 0); height: 4px; right: 0; }
+.xr-overlay.cutaway .xr-layer.cut .xr-cut i { opacity: .9; }
+
+/* 분해도 라벨(지시선 + 콜아웃) */
+.xr-callout {
+  position: absolute; left: calc(100% + 26px); top: 50%;
+  transform: translateY(-50%) rotateZ(var(--crz, 34deg)) rotateX(var(--crx, -58deg));
+  transform-origin: left center;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity .3s;
+}
+.xr-callout::before {
+  content: ''; position: absolute; right: calc(100% + 6px); top: 50%;
+  width: 26px; height: 1px; background: var(--tint-solid); opacity: .7;
+}
+.xr-callout span {
+  display: inline-block; padding: 3px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: -.2px;
+  background: var(--card); border: 1px solid var(--tint); color: var(--tint-solid);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+}
+.xr-callout em { font-style: normal; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.xr-overlay.exploded .xr-callout { opacity: 1; }
+
+/* 숨은 계측값 — X-ray 에서만 드러남 */
+.xr-internals {
+  position: absolute; left: 12px; right: 12px; bottom: 10px;
+  display: none; gap: 6px; flex-wrap: wrap;
+  font-size: 10.5px; color: var(--tint-solid);
+}
+.xr-internals code {
+  padding: 2px 6px; border-radius: 5px;
+  background: var(--tint-weak); border: 1px dashed var(--tint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ---------------- X-ray 모드 ---------------- */
+.xr-overlay.xray .xr-plate {
+  background: color-mix(in srgb, var(--tint-solid) 10%, color-mix(in srgb, var(--bg) 55%, transparent));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--tint-solid) 22%, transparent),
+              inset 0 0 30px color-mix(in srgb, var(--tint-solid) 10%, transparent);
+  border-color: var(--tint-solid);
+}
+.xr-overlay.xray .xr-slab { opacity: .12; }
+.xr-overlay.xray .xr-grid { opacity: .35; }
+.xr-overlay.xray .xr-head { background: none; }
+.xr-overlay.xray .xr-row .xr-t,
+.xr-overlay.xray .xr-head b { color: var(--tint-solid); }
+.xr-overlay.xray .xr-rows { opacity: .8; }
+.xr-overlay.xray .xr-internals { display: flex; }
+
+/* 라이트 테마 보정 — 투시 화면이 너무 옅어지지 않도록 */
+:root[data-theme="light"] .xr-overlay.xray .xr-plate {
+  background: color-mix(in srgb, var(--tint-solid) 13%, #fff);
+  box-shadow: 0 6px 20px rgba(30, 40, 60, .12), inset 0 0 0 1px color-mix(in srgb, var(--tint-solid) 35%, transparent);
+}
+:root[data-theme="light"] .xr-overlay.xray .xr-grid { opacity: .5; }
+:root[data-theme="light"] .xr-scan {
+  background: linear-gradient(to bottom, transparent 45%, rgba(20, 60, 90, .10) 50%, transparent 55%);
+}
+
+/* 스캔 라인 */
+.xr-scan {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(to bottom, transparent 45%,
+    rgba(37, 244, 238, .22) 50%, transparent 55%);
+  transition: opacity .3s;
+}
+.xr-overlay.xray .xr-scan { opacity: 1; animation: xr-scan 3.4s linear infinite; }
+@keyframes xr-scan { from { transform: translateY(-55%) } to { transform: translateY(55%) } }
+
+/* ---------------- HUD ---------------- */
+.xr-hud {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  border-top: 1px solid var(--card-border);
+  backdrop-filter: blur(10px);
+}
+.xr-hud .xr-title { font-weight: 800; font-size: 14px; margin-right: 4px; }
+.xr-hud .xr-title small { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 11.5px; }
+.xr-seg { display: flex; gap: 4px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 4px; }
+.xr-btn {
+  background: transparent; color: var(--muted); border: none; border-radius: 7px;
+  padding: 6px 11px; cursor: pointer; font-size: 12.5px; font-family: inherit;
+}
+.xr-btn:hover { color: var(--text); }
+.xr-btn.on { background: var(--chip-bg); color: var(--text); font-weight: 700; }
+.xr-toggle {
+  background: var(--input-bg); border: 1px solid var(--card-border); color: var(--muted);
+  border-radius: 9px; padding: 7px 11px; cursor: pointer; font-size: 12.5px; font-family: inherit;
+}
+.xr-toggle.on { color: var(--tiktok); border-color: var(--tiktok); background: color-mix(in srgb, var(--tiktok) 14%, transparent); font-weight: 700; }
+.xr-slider { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.xr-slider input { width: 130px; accent-color: var(--accent); }
+.xr-slider[hidden] { display: none; }
+.xr-hud .xr-spacer { margin-left: auto; }
+.xr-hint { font-size: 11.5px; color: var(--muted); }
+.xr-close {
+  background: var(--accent); color: #fff; border: none; border-radius: 9px;
+  padding: 8px 14px; cursor: pointer; font-size: 13px; font-weight: 700; font-family: inherit;
+}
+
+/* ---------------- 반응형 / 접근성 ---------------- */
+@media (max-width: 1500px) { .xr-hint { display: none; } }
+
+@media (max-width: 760px) {
+  .xr-layer { --w: 300px; --h: 196px; }
+  .xr-callout { display: none; }          /* 좁은 화면에선 판을 크게 — 라벨은 판 안에 이미 있음 */
+  .xr-head b { font-size: 13px; }
+  .xr-bar { width: 40px; }
+  .xr-hud { padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); gap: 6px; }
+  .xr-hud .xr-title small, .xr-hint { display: none; }
+  .xr-slider input { width: 92px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xr-overlay, .xr-deck, .xr-layer, .xr-plate { animation: none !important; transition: none !important; }
+  .xr-overlay.xray .xr-scan { animation: none; }
+}
