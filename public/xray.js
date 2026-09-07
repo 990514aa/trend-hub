@@ -454,7 +454,32 @@
     unsub = null;
   }
 
-  document.getElementById('xrayBtn')?.addEventListener('click', () => (state.open ? close() : open()));
+  // ---------------------------------------------------- WebGL 우선 ------
+  /** WebGL 이 되면 three.js 렌더러(xray3d.js)를, 안 되면 이 CSS 3D 버전을 쓴다 */
+  function webglOK() {
+    try {
+      const c = document.createElement('canvas');
+      return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl')));
+    } catch { return false; }
+  }
 
-  window.TrendHubXray = { open, close, setMode };
+  let gl3d = null;
+  async function toggle() {
+    if (gl3d?.isOpen()) return gl3d.close();
+    if (state.open) return close();
+    if (webglOK()) {
+      try {
+        gl3d = gl3d || await import('./xray3d.js');
+        return gl3d.open();
+      } catch (err) {
+        console.warn('[xray] WebGL 렌더러 로드 실패 — CSS 3D 로 폴백', err);
+        gl3d = null;
+      }
+    }
+    open();
+  }
+
+  document.getElementById('xrayBtn')?.addEventListener('click', toggle);
+
+  window.TrendHubXray = { open, close, setMode, toggle };
 })();

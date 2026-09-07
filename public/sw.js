@@ -1,6 +1,6 @@
 /* TrendHub 서비스워커 — 앱 셸은 캐시 우선, API는 네트워크 우선(오프라인 시 마지막 데이터) */
-const CACHE = 'trendhub-v3';
-const SHELL = ['/', '/app.css', '/app.js', '/xray.css', '/xray.js', '/manifest.webmanifest', '/icons/icon-192.png'];
+const CACHE = 'trendhub-v4';
+const SHELL = ['/', '/app.css', '/app.js', '/xray.css', '/xray.js', '/xray3d.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

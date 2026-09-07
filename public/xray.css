@@ -251,3 +251,37 @@
   .xr-overlay, .xr-deck, .xr-layer, .xr-plate { animation: none !important; transition: none !important; }
   .xr-overlay.xray .xr-scan { animation: none; }
 }
+
+/* ================================================================
+   WebGL(three.js) 렌더러 전용 — HUD/오버레이 스타일은 위와 공유
+   ================================================================ */
+.x3-stage { overflow: hidden; }
+.x3-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.x3-lines, .x3-labels { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+
+.x3-label {
+  position: absolute; left: 0; top: 0; will-change: transform;
+  white-space: nowrap; opacity: 0; transition: opacity .25s;
+  padding: 4px 11px; border-radius: 999px; font-size: 12px; line-height: 1.5;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tint, #888) 55%, transparent);
+  color: var(--tint, var(--text));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);
+  backdrop-filter: blur(6px);
+}
+.x3-label b { font-weight: 800; letter-spacing: -.2px; }
+.x3-label em { font-style: normal; color: var(--muted); margin-left: 7px; font-size: 11px; }
+
+.x3-badge {
+  margin-left: 8px; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700;
+  background: color-mix(in srgb, var(--tiktok) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tiktok) 45%, transparent);
+  color: var(--tiktok);
+}
+
+.x3-overlay {
+  background:
+    radial-gradient(1100px 700px at 50% 0%, color-mix(in srgb, var(--bg-glow) 70%, transparent), transparent 65%),
+    var(--bg);
+}
+@media (max-width: 760px) { .x3-label { display: none; } }
