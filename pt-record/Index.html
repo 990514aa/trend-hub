@@ -373,7 +373,38 @@ const LocalStore = {
   async listRange(from, to){ return Object.values(this.db().records).filter(r=>r.date>=from && r.date<=to); },
   async audit(id){ return this.db().audit.filter(a=>a.id===id); },
 };
-const Store = IS_GAS ? GasStore : LocalStore;
+// 메인 PC 서버(server.js / 물리치료기록.exe)에 접속한 경우
+const IS_SERVER = !IS_GAS && /^https?:$/.test(location.protocol);
+const HttpStore = {
+  async call(method, ...args){
+    for(let attempt=0; attempt<4; attempt++){
+      let pin=''; try{ pin=localStorage.getItem('ptrec.pin')||''; }catch(e){}
+      const r = await fetch('api', {method:'POST', headers:{'Content-Type':'application/json','X-PIN':pin}, body:JSON.stringify({method, args})});
+      if(r.status===401){
+        if(attempt===3) break;
+        const v=prompt(pin ? 'PIN이 맞지 않습니다. 다시 입력하세요.' : '메인 PC에서 정한 접속 PIN을 입력하세요.');
+        if(v==null) throw new Error('PIN이 필요합니다');
+        try{ localStorage.setItem('ptrec.pin', v.trim()); }catch(e){}
+        continue;
+      }
+      if(!r.ok) throw new Error('서버 오류 '+r.status);
+      const o=await r.json(); if(o && o.error) throw new Error(o.error); return o;
+    }
+    throw new Error('PIN이 맞지 않습니다');
+  },
+  init(date){ return this.call('bootstrap', date); },
+  poll(date, version){ return this.call('poll', date, version); },
+  save(rec, base, by){ return this.call('saveRecord', rec, base, by); },
+  remove(rec, reason, by){ return this.call('deleteRecord', rec.id, rec.date, reason, by); },
+  findPatients(q){ return this.call('findPatients', q); },
+  getPatient(regNo){ return this.call('getPatient', regNo); },
+  savePatient(p){ return this.call('savePatient', p); },
+  saveSettings(s){ return this.call('saveSettings', s); },
+  listRange(from, to){ return this.call('listRange', from, to); },
+  audit(id){ return this.call('getAudit', id); },
+};
+const Store = IS_GAS ? GasStore : IS_SERVER ? HttpStore : LocalStore;
+const SYNC_OK = IS_GAS ? '구글 시트 동기화됨' : IS_SERVER ? '메인 PC와 동기화됨' : '이 기기에 저장';
 
 // 현황판에 올릴 기록: 오늘 전체 + 최근 7일 중 아직 끝나지 않은 건(작성 대기·치료 중) (서버 Code.gs 에도 같은 로직)
 function inBoard(r, date){
@@ -405,7 +436,7 @@ const S = {
   tab:'board', room:'pt', local: loadLocal(), alarmed: new Set(), pickWaiting:null,
   ledgerDate: ymd(), ledgerRows:null, patientView:null, busy:0, lastErr:null,
 };
-S.local.device ||= (IS_GAS ? '' : '이 기기');
+S.local.device ||= ((IS_GAS||IS_SERVER) ? '' : '이 기기');
 if(S.local.sound===undefined) S.local.sound=true;
 if(S.local.voice===undefined) S.local.voice=true;
 
@@ -550,7 +581,7 @@ async function run(p, label){
   S.busy++; setSync('busy', label||'저장 중…');
   try{ const r=await p; S.lastErr=null; return r; }
   catch(e){ S.lastErr=e; toast('⚠️ '+(e.message||e)+' — 인터넷 연결을 확인하고 다시 시도하세요.'); throw e; }
-  finally{ S.busy--; if(!S.busy) setSync(S.lastErr?'err':'', S.lastErr?'연결 오류':(IS_GAS?'구글 시트 동기화됨':'이 기기에 저장')); }
+  finally{ S.busy--; if(!S.busy) setSync(S.lastErr?'err':'', S.lastErr?'연결 오류':SYNC_OK); }
 }
 async function saveRecord(rec, {quiet}={}){
   const base = rec._base; const out = clone(rec); delete out._base;
@@ -576,10 +607,10 @@ async function refresh(force){
     const res = await Store.poll(S.date, force?null:S.version);
     // 조회하는 동안 이 기기에서 저장이 있었다면 옛 상태이므로 버리고 다음 주기에 다시 받음
     if(seq !== (S.writeSeq||0) || S.busy){ S.version=null; return; }
-    if(res.same){ setSync('', IS_GAS?'구글 시트 동기화됨':'이 기기에 저장'); return; }
+    if(res.same){ setSync('', SYNC_OK); return; }
     if(res.settings) S.settings = mergeSettings(res.settings);
     S.records = res.records||[]; S.version = res.version;
-    setSync('', IS_GAS?'구글 시트 동기화됨':'이 기기에 저장');
+    setSync('', SYNC_OK);
     if(S.tab==='board' || (S.tab==='ledger' && S.ledgerDate===S.date && !$$('.sel:checked').length)) render();
   }catch(e){ setSync('err','연결 오류 — 재시도 중'); }
 }
@@ -628,7 +659,7 @@ function render(){
   else if(S.tab==='ledger') m.innerHTML=renderLedger();
   else if(S.tab==='patient') m.innerHTML=renderPatient();
   else if(S.tab==='guide') m.innerHTML=renderGuide();
-  else if(S.tab==='settings') m.innerHTML=renderSettings();
+  else if(S.tab==='settings'){ m.innerHTML=renderSettings(); if(IS_SERVER) loadServerInfo(); }
   tick();
 }
 function statusTag(r){
@@ -820,6 +851,7 @@ function renderSettings(){
       <p class="small muted">알람이 여러 기기에서 동시에 울리면 치료실 밖 기기는 소리를 꺼두세요. 음성 안내에는 환자 이름을 말하지 않습니다.</p>
       <button class="btn" data-act="testAlarm">알람 테스트</button>
     </div>
+    ${IS_SERVER?`<div class="panel" id="srvPanel" style="grid-column:1/-1"><h2>메인 PC 연결</h2><div class="muted small">불러오는 중…</div></div>`:''}
     <div class="panel">
       <h2>치료실 · 베드</h2>
       ${s.rooms.map(r=>`<div class="row" style="margin-bottom:6px"><input type="text" data-room-name="${r.id}" value="${esc(r.name)}" class="grow"><input type="number" min="1" max="40" data-room-beds="${r.id}" value="${r.beds}" style="width:70px"> 베드 · 번호 <input type="number" min="1" max="99" data-room-first="${r.id}" value="${r.first||1}" style="width:64px">번부터</div>`).join('')}
@@ -848,7 +880,16 @@ function renderSettings(){
     <div class="panel"><h2>치료 후 문구</h2><textarea id="stPost" rows="6">${esc(ph('post'))}</textarea></div>
   </div>
   <div class="row" style="margin-top:12px"><button class="btn pri" data-act="saveSettings">설정 저장</button>
-    ${IS_GAS?'':'<span class="grow"></span><button class="btn" data-act="backup">데이터 백업(JSON)</button><label class="btn">복원<input type="file" id="restore" accept=".json" hidden></label>'}</div>`;
+    ${IS_GAS||IS_SERVER?'':'<span class="grow"></span><button class="btn" data-act="backup">데이터 백업(JSON)</button><label class="btn">복원<input type="file" id="restore" accept=".json" hidden></label>'}</div>`;
+}
+
+async function loadServerInfo(){
+  let i; try{ i=await Store.call('serverInfo'); }catch(e){ return; }
+  const el=$('#srvPanel'); if(!el) return;
+  el.innerHTML=`<h2>메인 PC 연결</h2>
+    <div class="kv"><span class="muted">태블릿·다른 PC 주소</span><span>${i.urls.map(u=>`<b>${esc(u)}</b>`).join('<br>')||'네트워크 연결 없음'}<div class="small muted">같은 와이파이에서 이 주소를 크롬에 입력 → 즐겨찾기/홈 화면에 추가</div></span>
+    <span class="muted">데이터 폴더</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvDir" value="${esc(i.dataDir)}" class="grow"><button class="btn sm" data-act="setDir">변경</button></span><div class="small muted">구글 드라이브 폴더(예: G:\내 드라이브\물리치료기록)로 지정하면 자동 백업됩니다. 새 폴더가 비어 있으면 기존 데이터를 복사합니다.</div>`:esc(i.dataDir)}</span>
+    <span class="muted">접속 PIN</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvPin" placeholder="${i.pinSet?'설정됨 — 바꾸려면 새 PIN 입력':'숫자 4~6자리 권장'}" class="grow" inputmode="numeric"><button class="btn sm" data-act="setPin">저장</button></span><div class="small muted">다른 기기는 처음 접속할 때 한 번 입력합니다. 병원 와이파이에 외부인이 접속할 수 있다면 꼭 설정하세요. 비워서 저장하면 PIN 해제.</div>`:(i.pinSet?'설정됨':'없음')}</span></div>`;
 }
 
 /* ===================== 대화상자: 치료 시작 ===================== */
@@ -919,6 +960,7 @@ async function openStart(bed, waitingRec){
   const loadPlan = async regNo => {
     if(!regNo) return;
     let res; try{ res=await Store.getPatient(regNo); }catch(e){ return; }
+    if(!d.open || !$('#sRegNo') || $('#sRegNo').value.trim()!==regNo) return;   // 응답 전에 창을 닫았거나 번호를 바꾼 경우
     const p=res.patient; if(!p) { $('#sPlanNote').textContent='신규 환자'; return; }
     if(!$('#sName').value) $('#sName').value=p.name||'';
     if(p.plan && p.plan.room===room){
@@ -1147,6 +1189,8 @@ document.addEventListener('click', async ev=>{
     case 'pMemoSave': { const v=S.patientView; const p={...(v.patient||{regNo:v.regNo, name:v.records[0]?.name||''}), memo:$('#pMemo').value.trim()}; const res=await run(Store.savePatient(p)); v.patient=res.patient; toast('메모 저장'); break; }
     case 'saveSettings': saveSettingsForm(); break;
     case 'testAlarm': unlockAudio(); setTimeout(()=>{ beep(); speak('1번 베드, 치료 종료 시간입니다.'); toast('⏰ 알람 테스트','alarm'); },100); break;
+    case 'setDir': { try{ const r=await run(Store.call('setDataDir', $('#srvDir').value)); toast(r.copied?'데이터 폴더를 바꾸고 기존 데이터를 복사했습니다.':'데이터 폴더를 바꿨습니다.'); S.version=null; refresh(true); loadServerInfo(); }catch(e){} break; }
+    case 'setPin': { const v=$('#srvPin').value.trim(); if(v && !/^\d{4,}$/.test(v) && !confirm('숫자 4자리 이상을 권장합니다. 그대로 저장할까요?')) break; try{ await run(Store.call('setPin', v)); try{ localStorage.setItem('ptrec.pin', v); }catch(e){} toast(v?'PIN을 저장했습니다.':'PIN을 해제했습니다.'); loadServerInfo(); }catch(e){} break; }
     case 'backup': download(`물리치료기록_백업_${ymd()}.json`, localStorage.getItem(DB_KEY)||'{}', 'application/json'); break;
   }
 });
@@ -1182,7 +1226,7 @@ function openCsv(){
   const first=S.ledgerDate.slice(0,8)+'01';
   openDlg(`<div class="dlg-h"><h2>엑셀(CSV) 내보내기</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
   <div class="dlg-b"><div class="grid2"><label class="f"><span>시작일</span><input type="date" id="cFrom" value="${first}"></label><label class="f"><span>종료일</span><input type="date" id="cTo" value="${S.ledgerDate}"></label></div>
-  ${IS_GAS?'<p class="small muted">구글 시트의 「기록_YYYY-MM」 탭에서도 같은 내용을 바로 볼 수 있습니다.</p>':''}</div>
+  ${IS_GAS?'<p class="small muted">구글 시트의 「기록_YYYY-MM」 탭에서도 같은 내용을 바로 볼 수 있습니다.</p>':IS_SERVER?'<p class="small muted">메인 PC 데이터 폴더의 「기록_YYYY-MM.csv」 파일에도 월별 대장이 자동 저장됩니다.</p>':''}</div>
   <div class="dlg-f"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="doCsv">내려받기</button></div>`);
 }
 async function saveSettingsForm(){
@@ -1199,7 +1243,7 @@ async function saveSettingsForm(){
 
 /* ===================== 시작 ===================== */
 (async function boot(){
-  if(!IS_GAS) $('#banner').innerHTML='<div class="banner">이 기기 단독 모드 — 기록이 이 브라우저에만 저장됩니다. 여러 기기에서 함께 쓰려면 구글 시트에 설치하세요(README 참고). [설정]에서 정기적으로 백업하세요.</div>';
+  if(!IS_GAS && !IS_SERVER) $('#banner').innerHTML='<div class="banner">이 기기 단독 모드 — 기록이 이 브라우저에만 저장됩니다. 여러 기기에서 함께 쓰려면 구글 시트에 설치하세요(README 참고). [설정]에서 정기적으로 백업하세요.</div>';
   S.room=S.local.room||'pt';
   try{
     const res=await run(Store.init(S.date),'불러오는 중…');
@@ -1210,7 +1254,7 @@ async function saveSettingsForm(){
   if(!S.settings.therapists.length && !S.settings.doctors.length) toast('[설정]에서 처방의·치료사 명단을 먼저 입력하세요.', '', 6000);
   render();
   setInterval(tick, 1000);
-  setInterval(()=>{ if(ymd()!==S.date){ S.date=ymd(); S.ledgerDate=S.date; S.version=null; } if(!document.hidden) refresh(); }, IS_GAS?8000:3000);
+  setInterval(()=>{ if(ymd()!==S.date){ S.date=ymd(); S.ledgerDate=S.date; S.version=null; } if(!document.hidden) refresh(); }, IS_GAS?8000:IS_SERVER?3000:3000);
   window.addEventListener('storage', e=>{ if(e.key===DB_KEY) refresh(); });
   window.addEventListener('focus', ()=>refresh());
 })();
