@@ -536,6 +536,7 @@ async function run(p, label){
 }
 async function saveRecord(rec, {quiet}={}){
   const base = rec._base; const out = clone(rec); delete out._base;
+  S.writeSeq = (S.writeSeq||0) + 1;
   out.updatedAt = nowIso(); out.updatedBy = S.local.device || '';
   out.emrText = ['ended','done'].includes(out.status) ? emrOf(out) : '';
   const i = S.records.findIndex(r=>r.id===out.id);
@@ -552,8 +553,11 @@ async function saveRecord(rec, {quiet}={}){
 const withBase = r => ({...clone(r), _base:r.updatedAt});
 async function refresh(force){
   if(S.busy && !force) return;
+  const seq = S.writeSeq||0;
   try{
     const res = await Store.poll(S.date, force?null:S.version);
+    // 조회하는 동안 이 기기에서 저장이 있었다면 옛 상태이므로 버리고 다음 주기에 다시 받음
+    if(seq !== (S.writeSeq||0) || S.busy){ S.version=null; return; }
     if(res.same){ setSync('', IS_GAS?'구글 시트 동기화됨':'이 기기에 저장'); return; }
     if(res.settings) S.settings = mergeSettings(res.settings);
     S.records = res.records||[]; S.version = res.version;
