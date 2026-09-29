@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>물리치료 기록</title>
+<!--BRAND-->
+<!--/BRAND-->
 <style>
 :root{
   --bg:#f4f6f9; --panel:#fff; --line:#dde2ea; --text:#1b2330; --muted:#667085;
@@ -17,6 +19,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 16px}
 header h1{font-size:17px;margin:0;white-space:nowrap}
+.brand{display:flex;align-items:center;gap:8px}
+.brand img{height:32px;width:auto;max-width:200px;object-fit:contain}
+.brand small{font-size:13px;color:var(--muted);font-weight:600}
 header .clock{font-variant-numeric:tabular-nums;color:var(--muted)}
 nav.tabs{display:flex;gap:4px;flex-wrap:wrap}
 nav.tabs button{border:0;background:none;padding:7px 12px;border-radius:8px;color:var(--muted);font-weight:600}
@@ -143,7 +148,7 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
 <body>
 <div id="banner"></div>
 <header>
-  <h1>🩺 물리치료 기록</h1>
+  <h1 class="brand"><img id="brandLogo" alt="" hidden><span id="brandEmoji">🩺</span><span id="brandName">물리치료 기록</span></h1>
   <span class="clock" id="clock"></span>
   <nav class="tabs" id="tabs">
     <button data-tab="board" class="on">치료실 현황</button>
@@ -310,6 +315,7 @@ const PRESETS = {
 };
 const DEFAULT_SETTINGS = {
   rooms:[{id:'pt', name:'물리치료실', beds:12, first:1}, {id:'ex', name:'운동·특수치료실', beds:4, first:1}],
+  hospital:'연세오케이정형외과',
   doctors:[], therapists:[],
   sites:['C-spine','T-spine','L-spine','Shoulder','Elbow','Wrist','Hand','Hip','Knee','Ankle','Foot','Upper trapezius','Scapular area','Buttock','Thigh','Calf'],
   showCode:true,
@@ -657,7 +663,14 @@ function checkAlarms(){
 }
 
 /* ===================== 렌더링 ===================== */
+function applyBrand(){
+  const name=S.settings.hospital||'';
+  if(window.BRAND_LOGO){ const im=$('#brandLogo'); if(im.src!==window.BRAND_LOGO) im.src=window.BRAND_LOGO; im.hidden=false; $('#brandEmoji').hidden=true; }
+  $('#brandName').innerHTML = name ? `${esc(name)} <small>물리치료 기록</small>` : '물리치료 기록';
+  document.title = name ? `물리치료 기록 · ${name}` : '물리치료 기록';
+}
 function render(){
+  applyBrand();
   $$('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===S.tab));
   const m=$('#main');
   if(S.tab==='board') m.innerHTML=renderBoard();
@@ -851,6 +864,7 @@ function renderSettings(){
   <div class="grid2">
     <div class="panel">
       <h2>이 기기</h2>
+      <label class="f"><span>병원 이름 (화면 위쪽에 표시 · 모든 기기 공통)</span><input type="text" id="stHospital" value="${esc(S.settings.hospital||'')}"></label>
       <label class="f"><span>기기 이름 (수정 이력에 표시)</span><input type="text" id="stDevice" value="${esc(S.local.device||'')}" placeholder="예: 물리치료실 PC1"></label>
       <div class="row" style="margin-top:8px"><label class="row small"><input type="checkbox" id="stSound" ${S.local.sound?'checked':''}> 종료 알람 소리</label>
       <label class="row small"><input type="checkbox" id="stVoice" ${S.local.voice?'checked':''}> 음성 안내 ("3번 베드 치료 종료")</label></div>
@@ -1272,6 +1286,7 @@ async function saveSettingsForm(){
   S.local.device=$('#stDevice').value.trim(); S.local.sound=$('#stSound').checked; S.local.voice=$('#stVoice').checked; saveLocal();
   const s=clone(S.settings);
   s.rooms=s.rooms.map(r=>({...r, name:$(`[data-room-name="${r.id}"]`).value.trim()||r.name, beds:Math.min(40,Math.max(1,parseInt($(`[data-room-beds="${r.id}"]`).value)||r.beds)), first:Math.max(1,parseInt($(`[data-room-first="${r.id}"]`).value)||r.first||1)}));
+  s.hospital=$('#stHospital').value.trim();
   s.doctors=lines('stDoctors'); s.therapists=lines('stTherapists'); s.sites=lines('stSites'); s.showCode=$('#stShowCode').checked;
   s.phrases={pre:lines('stPre'), during:lines('stDuring'), post:lines('stPost')};
   s.mods={};

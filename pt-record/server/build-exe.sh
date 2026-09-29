@@ -24,10 +24,20 @@ cat > "$OUT/sea-config.json" <<EOF
 EOF
 (cd "$OUT" && node --experimental-sea-config sea-config.json)
 
-# 3) node.exe 에 주입
+# 3) node.exe 에 blob 주입
 cp "$OUT/node-$VER.exe" "$OUT/$NAME.exe"
 npx --yes postject@1.0.0-alpha.6 "$OUT/$NAME.exe" NODE_SEA_BLOB "$OUT/sea-prep.blob" \
   --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+
+# 3-1) 병원 로고 아이콘·파일 정보 (branding/icon.ico 가 있을 때)
+#      주입 뒤에 적용해야 안전함: 리소스(.rsrc)만 바뀌고 코드·재배치 영역은 그대로
+ICON=../branding/icon.ico
+if [ -f "$ICON" ]; then
+  npx --yes resedit-cli@2 --ignore-signed --in "$OUT/$NAME.exe" --out "$OUT/$NAME.icon.exe" \
+    --icon "1,$ICON" --product-name "물리치료 기록" --file-description "물리치료 기록 - 메인 PC 서버" \
+    --original-filename "$NAME.exe" --internal-name "$NAME" --company-name "${HOSPITAL:-연세오케이정형외과}"
+  mv "$OUT/$NAME.icon.exe" "$OUT/$NAME.exe"
+fi
 
 # 4) 배포용 zip
 PKG="$OUT/$NAME"
