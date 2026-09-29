@@ -90,6 +90,7 @@ h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
 .tag.emr{background:#e9e4ff;color:#5b3fd6}
 /* forms */
 dialog{border:0;border-radius:14px;padding:0;width:min(880px,calc(100vw - 20px));max-height:calc(100vh - 20px);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+dialog.cfm{width:min(480px,calc(100vw - 24px))}
 dialog::backdrop{background:rgba(15,23,42,.45)}
 .dlg-h{position:sticky;top:0;background:var(--panel);z-index:2;padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
 .dlg-h h2{margin:0}
@@ -155,6 +156,7 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
 </header>
 <main id="main"></main>
 <dialog id="dlg"></dialog>
+<dialog id="cfm" class="cfm"></dialog>
 <div id="toast"></div>
 
 <script>
@@ -166,15 +168,18 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
  * ===================================================================== */
 const POS = ['Prone','Supine','Sitting','Side-lying'];
 const MODALITIES = [
-  { id:'hotpack', name:'표층열치료', en:'Hot pack', code:'MM010', coverage:'급여', room:'pt', min:15, phase:1, enabled:true, dailyOnce:true, group:'heat',
+  // 표층열치료(MM010) 처방을 적외선 열치료로 시행 — 적외선치료는 표층열치료(사-101)에 포함되는 행위
+  { id:'hotpack', name:'표층열치료(적외선)', en:'IR', code:'MM010', coverage:'급여', room:'pt', min:15, phase:1, enabled:true, dailyOnce:true, group:'heat', autoStop:true,
     fields:[
-      {k:'method', label:'적용 방법', type:'select', options:['Hot pack(온습포)','적외선(IR)','파라핀욕'], def:'Hot pack(온습포)'},
-      {k:'temp', label:'온도', type:'text', def:'온습포 보관 약 71~79℃'},
-      {k:'towel', label:'수건', type:'select', options:['6~8겹','4~6겹','8겹 이상(열 민감)'], def:'6~8겹'},
+      {k:'method', label:'적용 방법', type:'select', options:['적외선 열치료(IR)','Hot pack(온습포)'], def:'적외선 열치료(IR)'},
+      {k:'dist', label:'램프-피부 거리(cm)', type:'number', unit:'cm', def:'50', hint:'일반적으로 45~60cm'},
+      {k:'angle', label:'조사 각도', type:'select', options:['치료 부위에 수직 조사','비스듬히 조사(열 분산)'], def:'치료 부위에 수직 조사'},
+      {k:'heat', label:'온감', type:'select', options:['편안한 온감 수준','약한 온감(열 민감)'], def:'편안한 온감 수준'},
       {k:'pos', label:'자세', type:'select', options:POS, def:'Prone'},
+      {k:'skin', label:'안전', type:'select', options:['조사 부위 노출·피부 상태 확인','금속·파스 제거 후 피부 상태 확인'], def:'조사 부위 노출·피부 상태 확인'},
     ],
-    tpl:'{method}, {temp}, 수건 {towel} 적용, 자세 {pos}',
-    basis:'표층열치료(사-101, MM010): 온습포·적외선 등. 외래 1일 1회(입원 1일 2회)만 산정. 한냉치료와 동시에 실시하면 한 가지만 산정.' },
+    tpl:'{method}, 램프-피부 거리 {dist}cm, {angle}, {heat}, 자세 {pos}, {skin}',
+    basis:'표층열치료(사-101, MM010): 온습포·적외선 등 포함 — 현재 적외선 열치료로 시행. 외래 1일 1회(입원 1일 2회)만 산정. 한냉치료와 동시에 실시하면 한 가지만 산정. 기록 시 조사 거리·시간·피부 상태를 남김.' },
   { id:'ict', name:'간섭파전류치료', en:'ICT', code:'MM080', coverage:'급여', room:'pt', min:15, phase:1, enabled:true, dailyOnce:true, autoStop:true, group:'elec',
     fields:[
       {k:'electrode', label:'전극', type:'select', options:['4극 흡착컵(교차배치)','4극 패드(교차배치)','2극(Premodulated)'], def:'4극 흡착컵(교차배치)'},
@@ -288,12 +293,12 @@ const PHRASES = {
 };
 const PRESETS = {
   pt:[
-    {name:'HP + ICT', items:['hotpack','ict']},
-    {name:'HP + ICT + 레이저', items:['hotpack','ict','laser']},
+    {name:'IR + ICT', items:['hotpack','ict']},
+    {name:'IR + ICT + 레이저', items:['hotpack','ict','laser']},
     {name:'콜드팩 + ICT', items:['coldpack','ict']},
     {name:'Cryo + ICT', items:['cryo','ict']},
-    {name:'HP + 경추견인', items:['hotpack','tractC']},
-    {name:'HP + 골반견인', items:['hotpack','tractL']},
+    {name:'IR + 경추견인', items:['hotpack','tractC']},
+    {name:'IR + 골반견인', items:['hotpack','tractL']},
   ],
   ex:[
     {name:'도수', items:['manual']},
@@ -304,7 +309,7 @@ const PRESETS = {
   ],
 };
 const DEFAULT_SETTINGS = {
-  rooms:[{id:'pt', name:'물리치료실', beds:14, first:1}, {id:'ex', name:'운동·특수치료실', beds:4, first:1}],
+  rooms:[{id:'pt', name:'물리치료실', beds:12, first:1}, {id:'ex', name:'운동·특수치료실', beds:4, first:1}],
   doctors:[], therapists:[],
   sites:['C-spine','T-spine','L-spine','Shoulder','Elbow','Wrist','Hand','Hip','Knee','Ankle','Foot','Upper trapezius','Scapular area','Buttock','Thigh','Calf'],
   showCode:true,
@@ -665,12 +670,12 @@ function render(){
 function statusTag(r){
   const map={running:['run','치료 중'],ended:['wait','작성 대기'],done:['done','작성 완료'],cancelled:['cancel','취소'],waiting:['','대기']};
   const [c,t]=map[r.status]||['',r.status];
-  return `<span class="tag ${c}">${t}</span>${r.status==='done'&&r.emrDone?' <span class="tag emr">EMR✓</span>':''}`;
+  return `<span class="tag ${c}">${t}</span>${r.status==='done'&&r.incomplete?.length?` <span class="tag cancel" title="${esc(r.incomplete.join(' / '))}">미비 ${r.incomplete.length}</span>`:''}${r.status==='done'&&r.emrDone?' <span class="tag emr">EMR✓</span>':''}`;
 }
 const modNames = r => r.items.map(i=>MOD(i.mid)?.en||MOD(i.mid)?.name||i.mid).join(' + ');
 
-/* 물리치료실 배치도: 위쪽 벽을 따라 1~12번(2개씩), 아래 스테이션·출입구·13·14번 칸·휴게실. 운동·특수치료실은 아래 별도 표시 */
-const STRIP_BEDS = 12;
+/* 물리치료실 배치도: 위쪽 벽을 따라 1~10번(2개씩), 아래 스테이션·출입구·11·12번 칸·휴게실. 운동·특수치료실은 아래 별도 표시 */
+const STRIP_BEDS = 10;
 const bedLabel = r => r.room==='ex' ? `특수 ${r.bed}번` : `${r.bed}번`;
 const bedNums = room => Array.from({length:room.beds}, (_,i)=>(room.first||1)+i);
 function bedTile(room, b){
@@ -773,6 +778,7 @@ function renderLedger(){
     <button class="btn" data-act="ldToday">오늘</button>
     <span class="grow"></span>
     <button class="btn" data-act="copySel">선택 EMR 복사</button>
+    <button class="btn bad" data-act="delSel">선택 삭제</button>
     <button class="btn" data-act="csvOpen">엑셀(CSV) 내보내기</button>
     <button class="btn" data-act="print">인쇄</button>
   </div>
@@ -781,7 +787,7 @@ function renderLedger(){
   <div class="tablewrap"><table class="t">
     <thead><tr><th class="no-print"><input type="checkbox" id="selAll"></th><th>시간</th><th>치료실/베드</th><th>등록번호</th><th>이름</th><th>치료 항목</th><th>처방의</th><th>시행자</th><th>상태</th><th class="no-print"></th></tr></thead>
     <tbody>${rows.map(r=>`<tr class="${r.status==='cancelled'?'cancel':''}">
-      <td class="no-print"><input type="checkbox" class="sel" value="${r.id}" ${r.status==='done'?'':'disabled'}></td>
+      <td class="no-print"><input type="checkbox" class="sel" value="${r.id}"></td>
       <td>${hm(r.startAt)}~${r.endAt?hm(r.endAt):''}</td><td>${esc(roomName(r.room))} ${r.bed?r.bed+'번':''}</td>
       <td>${esc(r.regNo)}</td><td>${esc(r.name)}</td><td>${esc(r.items.map(i=>`${MOD(i.mid)?.en||i.mid} ${i.start&&i.end?mins(i.start,i.end):i.min}′`).join(', '))}</td>
       <td>${esc(r.doctor||'')}</td><td>${esc(r.therapist||'')}</td><td>${statusTag(r)}${r.cancelReason?`<div class="small muted">${esc(r.cancelReason)}</div>`:''}</td>
@@ -829,7 +835,7 @@ function renderGuide(){
       <li>표층열 + 한냉치료를 같은 날 시행 → 한 가지만 산정 경고</li>
       <li>표층열·한냉·ICT·TENS를 같은 날 다시 시행 → 외래 1일 1회 / 입원 1일 2회 초과 경고</li>
       <li>단순운동 10분 미만, 복합운동 30분 미만 → 산정 불가 경고 · 단순+복합운동 동시 → 주된 항목만 산정 경고</li>
-      <li>핫팩 등 수동 종료 항목이 설정 시간보다 짧게 끝나면 사유 기록 안내</li>
+      <li>콜드팩·Cryo 등 수동 종료 항목이 설정 시간보다 짧게 끝나면 사유 기록 안내</li>
       <li>시작·종료 시각은 버튼을 누른 실제 시각으로 기록되며, 나중에 수정하면 <b>수정 이력</b>(누가·언제·무엇을)이 남습니다.</li>
     </ul>
     <h3>경과(치료 후 상태) 문구 주의</h3>
@@ -855,7 +861,7 @@ function renderSettings(){
     <div class="panel">
       <h2>치료실 · 베드</h2>
       ${s.rooms.map(r=>`<div class="row" style="margin-bottom:6px"><input type="text" data-room-name="${r.id}" value="${esc(r.name)}" class="grow"><input type="number" min="1" max="40" data-room-beds="${r.id}" value="${r.beds}" style="width:70px"> 베드 · 번호 <input type="number" min="1" max="99" data-room-first="${r.id}" value="${r.first||1}" style="width:64px">번부터</div>`).join('')}
-      <p class="small muted" style="margin:4px 0 0">배치도: ${esc(s.rooms[0].name)} 1~12번은 위쪽 벽을 따라 2개씩, 13번부터는 아래 휴게실 옆 칸에 표시됩니다. ${esc(s.rooms[1].name)} 베드는 '특1, 특2…'로 배치도 아래에 표시됩니다.</p>
+      <p class="small muted" style="margin:4px 0 0">배치도: ${esc(s.rooms[0].name)} 1~10번은 위쪽 벽을 따라 2개씩, 11번부터는 아래 휴게실 옆 칸에 표시됩니다. ${esc(s.rooms[1].name)} 베드는 '특1, 특2…'로 배치도 아래에 표시됩니다.</p>
       <label class="row small" style="margin-top:6px"><input type="checkbox" id="stShowCode" ${s.showCode?'checked':''}> 기록문에 수가코드 표시</label>
     </div>
     <div class="panel"><h2>처방의 명단</h2><textarea id="stDoctors" rows="5" placeholder="한 줄에 한 명">${esc(s.doctors.join('\n'))}</textarea></div>
@@ -1102,14 +1108,35 @@ function collectEdit(){
   r.emrOverride = d._override ? $('#eEmr').value : '';
   return r;
 }
+// 확인 창 (예/아니오). body 는 HTML
+function askConfirm(title, body, okLabel='확인', okClass='pri'){
+  return new Promise(resolve=>{
+    const c=$('#cfm');
+    c.innerHTML=`<div class="dlg-h"><h2>${esc(title)}</h2></div><div class="dlg-b">${body}</div>
+      <div class="dlg-f"><button class="btn" data-cfm="0">취소</button><button class="btn ${okClass}" data-cfm="1">${esc(okLabel)}</button></div>`;
+    // 확인 시 창 안 입력값을 {id: 값} 으로 돌려줌 (취소는 false)
+    const done=v=>{ const vals=Object.fromEntries([...c.querySelectorAll('input[id],textarea[id]')].map(i=>[i.id,i.value])); c.close(); c.innerHTML=''; resolve(v?vals:false); };
+    c.onclick=e=>{ const b=e.target.closest('[data-cfm]'); if(b) done(b.dataset.cfm==='1'); };
+    c.oncancel=e=>{ e.preventDefault(); done(false); };
+    c.showModal(); setTimeout(()=>c.querySelector('[data-cfm="1"]')?.focus(),30);
+  });
+}
 async function saveEdit(done){
-  const r=collectEdit(); const {err}=checkRecord(r, done);
-  if(done && err.length){ $('#eChecks').scrollIntoView({behavior:'smooth'}); toast('필수 항목을 확인하세요.'); return; }
+  const r=collectEdit(); const {err, warn}=checkRecord(r, done);
+  if(done){
+    const li = a => `<ul style="margin:4px 0 0;padding-left:18px">${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    const head = `<p style="margin:0"><b>${esc(r.regNo)} ${esc(r.name)}</b> · ${esc(modNames(r))}</p>`;
+    const ok = err.length
+      ? await askConfirm('부족한 사항이 있습니다', head+`<div class="errbox"><b>부족한 사항 ${err.length}건</b>${li(err)}</div>`+(warn.length?`<div class="warnbox"><b>산정기준 점검</b>${li(warn)}</div>`:'')+'<p style="margin:0">부족한 상태로 제출하시겠습니까?</p>', '그래도 제출', 'bad')
+      : await askConfirm('작성 완료 처리', head+(warn.length?`<div class="warnbox"><b>산정기준 점검</b>${li(warn)}</div>`:'')+'<p style="margin:0">작성 완료로 처리하시겠습니까?<br><span class="small muted">기록문이 복사되니 EMR에 붙여넣으세요.</span></p>', '작성 완료', 'ok');
+    if(!ok){ if(err.length) $('#eChecks').scrollIntoView({behavior:'smooth'}); return; }
+    if(err.length) r.incomplete = err; else delete r.incomplete;
+  }
   if(done){ r.status='done'; await copyText(emrOf(r)); }
   else if(r.status==='done' && checkRecord(r,true).err.length) r.status='ended';
   r._base=$('#dlg')._rec._base;
   const saved = await saveRecord(r);
-  if(saved){ closeDlg(); toast(done?'작성 완료 — 기록문이 복사되었습니다. EMR에 붙여넣으세요.':'저장했습니다.'); if(S.tab==='patient'&&S.patientView?.regNo) loadPatientView(S.patientView.regNo); if(S.tab==='ledger'&&S.ledgerDate!==S.date) loadLedger(); }
+  if(saved){ closeDlg(); toast(done?(r.incomplete?'부족한 사항이 있는 채로 제출했습니다 — 기록문 복사됨':'작성 완료 — 기록문이 복사되었습니다. EMR에 붙여넣으세요.'):'저장했습니다.'); if(S.tab==='patient'&&S.patientView?.regNo) loadPatientView(S.patientView.regNo); if(S.tab==='ledger'&&S.ledgerDate!==S.date) loadLedger(); }
 }
 
 /* ===================== 기타 동작 ===================== */
@@ -1177,9 +1204,20 @@ document.addEventListener('click', async ev=>{
     case 'ldPrev': case 'ldNext': S.ledgerDate=shiftDate(S.ledgerDate, act==='ldPrev'?-1:1); if(S.ledgerDate===S.date) render(); else loadLedger(); break;
     case 'ldToday': S.ledgerDate=S.date; render(); break;
     case 'copySel': {
-      const ids=$$('.sel:checked').map(c=>c.value); const rows=(S.ledgerDate===S.date?S.records:S.ledgerRows||[]).filter(r=>ids.includes(r.id));
+      const ids=$$('.sel:checked').map(c=>c.value); const rows=(S.ledgerDate===S.date?S.records:S.ledgerRows||[]).filter(r=>ids.includes(r.id) && r.status==='done');
       if(!rows.length){ toast('작성 완료된 기록을 선택하세요.'); break; }
       if(await copyText(rows.map(emrOf).join('\n\n'))) toast(`${rows.length}건 기록문을 복사했습니다.`); break; }
+    case 'delSel': {
+      const ids=$$('.sel:checked').map(c=>c.value); const rows=(S.ledgerDate===S.date?S.records:S.ledgerRows||[]).filter(r=>ids.includes(r.id));
+      if(!rows.length){ toast('삭제할 기록을 선택하세요.'); break; }
+      const ok=await askConfirm(`${rows.length}건 삭제`, `<ul style="margin:0;padding-left:18px">${rows.map(r=>`<li>${hm(r.startAt)} ${esc(r.regNo)} ${esc(r.name)} · ${esc(modNames(r))} ${statusTag(r)}</li>`).join('')}</ul>
+        <label class="f"><span>삭제 사유 (수정 이력에 남습니다)</span><input type="text" id="delWhy" placeholder="예: 중복 입력, 잘못 입력"></label>
+        <p class="small muted" style="margin:0">삭제하면 되돌릴 수 없습니다. ${rows.some(r=>r.status==='running')?'<b>치료 중인 건은 베드가 비워집니다.</b>':''}</p>`, '삭제', 'bad');
+      if(!ok) break;
+      const why=(ok.delWhy||'').trim() || '대장에서 선택 삭제';
+      S.records=S.records.filter(r=>!ids.includes(r.id)); if(S.ledgerRows) S.ledgerRows=S.ledgerRows.filter(r=>!ids.includes(r.id)); render();
+      for(const r of rows) await run(Store.remove(r, why, S.local.device||''), '삭제 중…');
+      S.version=null; toast(`${rows.length}건 삭제했습니다.`); break; }
     case 'csvOpen': openCsv(); break;
     case 'doCsv': { const f=$('#cFrom').value, to=$('#cTo').value; const rows=await run(Store.listRange(f,to),'불러오는 중…'); download(`치료대장_${f}_${to}.csv`, csvOf(rows.sort((x,y)=>(x.startAt||'').localeCompare(y.startAt||'')))); closeDlg(); break; }
     case 'print': window.print(); break;
