@@ -909,6 +909,7 @@ async function loadServerInfo(){
   el.innerHTML=`<h2>메인 PC 연결</h2>
     <div class="kv"><span class="muted">태블릿·다른 PC 주소</span><span>${i.urls.map(u=>`<b>${esc(u)}</b>`).join('<br>')||'네트워크 연결 없음'}<div class="small muted">같은 와이파이에서 이 주소를 크롬에 입력 → 즐겨찾기/홈 화면에 추가</div></span>
     <span class="muted">데이터 폴더</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvDir" value="${esc(i.dataDir)}" class="grow"><button class="btn sm" data-act="setDir">변경</button></span><div class="small muted">구글 드라이브 폴더(예: G:\내 드라이브\물리치료기록)로 지정하면 자동 백업됩니다. 새 폴더가 비어 있으면 기존 데이터를 복사합니다.</div>`:esc(i.dataDir)}</span>
+    <span class="muted">자동 백업</span><span>${esc(i.backupDir||'')}<div class="small muted">매일 데이터 폴더 전체를 날짜별로 복사해 30일치 보관합니다. 저장할 때마다 직전 파일도 .bak 으로 남깁니다.</div></span>
     <span class="muted">접속 PIN</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvPin" placeholder="${i.pinSet?'설정됨 — 바꾸려면 새 PIN 입력':'숫자 4~6자리 권장'}" class="grow" inputmode="numeric"><button class="btn sm" data-act="setPin">저장</button></span><div class="small muted">다른 기기는 처음 접속할 때 한 번 입력합니다. 병원 와이파이에 외부인이 접속할 수 있다면 꼭 설정하세요. 비워서 저장하면 PIN 해제.</div>`:(i.pinSet?'설정됨':'없음')}</span></div>`;
 }
 
@@ -1296,7 +1297,14 @@ async function saveSettingsForm(){
 
 /* ===================== 시작 ===================== */
 (async function boot(){
-  if(!IS_GAS && !IS_SERVER) $('#banner').innerHTML='<div class="banner">이 기기 단독 모드 — 기록이 이 브라우저에만 저장됩니다. 여러 기기에서 함께 쓰려면 구글 시트에 설치하세요(README 참고). [설정]에서 정기적으로 백업하세요.</div>';
+  if(!IS_GAS && !IS_SERVER){
+    // zip 안에서 열거나 임시 폴더에서 열면 주소가 매번 바뀌어 브라우저 저장소가 이어지지 않음
+    const tmp=/\/(temp|tmp)\/|\.zip\//i.test(decodeURIComponent(location.pathname));
+    $('#banner').innerHTML = tmp
+      ? '<div class="banner" style="background:var(--bad-soft);color:#991b1b">⚠ 압축 파일(zip) 안이나 임시 폴더에서 연 상태입니다. 이렇게 열면 다시 열 때 기록이 이어지지 않습니다. 파일을 고정된 폴더(예: C:\\물리치료기록)에 복사한 뒤 여세요.</div>'
+      : '<div class="banner">이 기기 단독 모드 — 기록이 이 브라우저에만 저장됩니다. 여러 기기에서 함께 쓰려면 메인 PC 프로그램이나 구글 시트로 설치하세요(README 참고). [설정]에서 정기적으로 백업하세요.</div>';
+  }
+  if(IS_SERVER) Store.call('serverInfo').then(i=>{ if(i.tempRun) $('#banner').innerHTML='<div class="banner" style="background:var(--bad-soft);color:#991b1b">⚠ zip 파일 안에서 바로 실행 중입니다. 기록은 안전하게 저장되지만 프로그램 파일이 임시 폴더라 곧 지워집니다. zip을 [압축 풀기] 한 뒤 푼 폴더의 물리치료기록.exe 를 실행하세요.</div>'; }).catch(()=>{});
   S.room=S.local.room||'pt';
   try{
     const res=await run(Store.init(S.date),'불러오는 중…');
