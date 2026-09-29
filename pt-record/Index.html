@@ -349,7 +349,7 @@ const GasStore = {
   call(method, ...args){
     return new Promise((res, rej) => google.script.run
       .withSuccessHandler(r => { try{ const o=JSON.parse(r); o && o.error ? rej(new Error(o.error)) : res(o); }catch(e){ rej(e); } })
-      .withFailureHandler(rej).api(method, JSON.stringify(args)));
+      .withFailureHandler(e=>{ const err=new Error(e&&e.message||String(e)); err.network=true; rej(err); }).api(method, JSON.stringify(args)));
   },
   init(date){ return this.call('bootstrap', date); },
   poll(date, version){ return this.call('poll', date, version); },
@@ -390,7 +390,9 @@ const HttpStore = {
   async call(method, ...args){
     for(let attempt=0; attempt<4; attempt++){
       let pin=''; try{ pin=localStorage.getItem('ptrec.pin')||''; }catch(e){}
-      const r = await fetch('api', {method:'POST', headers:{'Content-Type':'application/json','X-PIN':pin}, body:JSON.stringify({method, args})});
+      let r;
+      try{ r = await fetch('api', {method:'POST', headers:{'Content-Type':'application/json','X-PIN':pin}, body:JSON.stringify({method, args})}); }
+      catch(e){ const err=new Error('메인 PC에 연결할 수 없습니다'); err.network=true; throw err; }
       if(r.status===401){
         if(attempt===3) break;
         const v=prompt(pin ? 'PIN이 맞지 않습니다. 다시 입력하세요.' : '메인 PC에서 정한 접속 PIN을 입력하세요.');
@@ -398,7 +400,7 @@ const HttpStore = {
         try{ localStorage.setItem('ptrec.pin', v.trim()); }catch(e){}
         continue;
       }
-      if(!r.ok) throw new Error('서버 오류 '+r.status);
+      if(!r.ok){ const err=new Error('메인 PC 응답 오류 '+r.status); err.network=true; throw err; }
       const o=await r.json(); if(o && o.error) throw new Error(o.error); return o;
     }
     throw new Error('PIN이 맞지 않습니다');
@@ -591,8 +593,13 @@ function setSync(state, text){ const el=$('#sync'); el.className='sync '+(state|
 async function run(p, label){
   S.busy++; setSync('busy', label||'저장 중…');
   try{ const r=await p; S.lastErr=null; return r; }
-  catch(e){ S.lastErr=e; toast('⚠️ '+(e.message||e)+' — 인터넷 연결을 확인하고 다시 시도하세요.'); throw e; }
-  finally{ S.busy--; if(!S.busy) setSync(S.lastErr?'err':'', S.lastErr?'연결 오류':SYNC_OK); }
+  catch(e){
+    // 연결 문제일 때만 '연결 확인' 안내. 그 밖의 오류는 실제 원인을 그대로 보여준다
+    S.lastErr = e && e.network ? e : null;
+    const hint = e && e.network ? (IS_SERVER ? ' — 메인 PC 프로그램(검은 창)이 켜져 있는지, 같은 와이파이인지 확인하세요.' : ' — 인터넷 연결을 확인하고 다시 시도하세요.') : '';
+    toast('⚠️ '+(e.message||e)+hint, '', 7000); throw e;
+  }
+  finally{ S.busy--; if(!S.busy) setSync(S.lastErr?'err':'', S.lastErr?(IS_SERVER?'메인 PC 연결 끊김':'연결 오류'):SYNC_OK); }
 }
 async function saveRecord(rec, {quiet}={}){
   const base = rec._base; const out = clone(rec); delete out._base;
@@ -623,7 +630,7 @@ async function refresh(force){
     S.records = res.records||[]; S.version = res.version;
     setSync('', SYNC_OK);
     if(S.tab==='board' || (S.tab==='ledger' && S.ledgerDate===S.date && !$$('.sel:checked').length)) render();
-  }catch(e){ setSync('err','연결 오류 — 재시도 중'); }
+  }catch(e){ setSync('err', IS_SERVER?'메인 PC 연결 끊김 — 재시도 중':'연결 오류 — 재시도 중'); }
 }
 
 /* ===================== 알림 ===================== */
@@ -908,7 +915,9 @@ async function loadServerInfo(){
   const el=$('#srvPanel'); if(!el) return;
   el.innerHTML=`<h2>메인 PC 연결</h2>
     <div class="kv"><span class="muted">태블릿·다른 PC 주소</span><span>${i.urls.map(u=>`<b>${esc(u)}</b>`).join('<br>')||'네트워크 연결 없음'}<div class="small muted">같은 와이파이에서 이 주소를 크롬에 입력 → 즐겨찾기/홈 화면에 추가</div></span>
-    <span class="muted">데이터 폴더</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvDir" value="${esc(i.dataDir)}" class="grow"><button class="btn sm" data-act="setDir">변경</button></span><div class="small muted">구글 드라이브 폴더(예: G:\내 드라이브\물리치료기록)로 지정하면 자동 백업됩니다. 새 폴더가 비어 있으면 기존 데이터를 복사합니다.</div>`:esc(i.dataDir)}</span>
+    <span class="muted">데이터 폴더</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvDir" value="${esc(i.dataDir)}" class="grow"><button class="btn sm" data-act="setDir">변경</button></span>
+      <div class="row" style="margin-top:6px"><button class="btn sm" data-act="findDrive">구글 드라이브 폴더 찾기</button><span id="driveCands" class="row small"></span></div>
+      <div class="small muted">웹 링크가 아니라 PC의 폴더 경로를 넣습니다 (예: G:\\내 드라이브\\물리치료기록). PC에 'Google Drive 데스크톱'이 설치·로그인돼 있어야 하며, 새 폴더가 비어 있으면 기존 데이터를 복사합니다.</div>`:esc(i.dataDir)}</span>
     <span class="muted">자동 백업</span><span>${esc(i.backupDir||'')}<div class="small muted">매일 데이터 폴더 전체를 날짜별로 복사해 30일치 보관합니다. 저장할 때마다 직전 파일도 .bak 으로 남깁니다.</div></span>
     <span class="muted">접속 PIN</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvPin" placeholder="${i.pinSet?'설정됨 — 바꾸려면 새 PIN 입력':'숫자 4~6자리 권장'}" class="grow" inputmode="numeric"><button class="btn sm" data-act="setPin">저장</button></span><div class="small muted">다른 기기는 처음 접속할 때 한 번 입력합니다. 병원 와이파이에 외부인이 접속할 수 있다면 꼭 설정하세요. 비워서 저장하면 PIN 해제.</div>`:(i.pinSet?'설정됨':'없음')}</span></div>`;
 }
@@ -1243,6 +1252,14 @@ document.addEventListener('click', async ev=>{
     case 'saveSettings': saveSettingsForm(); break;
     case 'testAlarm': unlockAudio(); setTimeout(()=>{ beep(); speak('1번 베드, 치료 종료 시간입니다.'); toast('⏰ 알람 테스트','alarm'); },100); break;
     case 'setDir': { try{ const r=await run(Store.call('setDataDir', $('#srvDir').value)); toast(r.copied?'데이터 폴더를 바꾸고 기존 데이터를 복사했습니다.':'데이터 폴더를 바꿨습니다.'); S.version=null; refresh(true); loadServerInfo(); }catch(e){} break; }
+    case 'findDrive': {
+      let c=[]; try{ c=await run(Store.call('findDriveFolders'),'찾는 중…'); }catch(e){ break; }
+      const el=$('#driveCands');
+      el.innerHTML = c.length ? '→ '+c.map(x=>`<button class="chip" data-act="pickDrive" data-path="${esc(x.target)}">${esc(x.target)}</button>`).join(' ')
+        : '<span style="color:var(--bad)">이 PC에서 구글 드라이브 폴더를 찾지 못했습니다. <a href="https://www.google.com/drive/download/" target="_blank" rel="noopener">Google Drive 데스크톱</a>을 설치·로그인하면 탐색기에 G: 드라이브(내 드라이브)가 생깁니다.</span>';
+      if(c.length===1) $('#srvDir').value=c[0].target;
+      break; }
+    case 'pickDrive': $('#srvDir').value=a.dataset.path; break;
     case 'setPin': { const v=$('#srvPin').value.trim(); if(v && !/^\d{4,}$/.test(v) && !confirm('숫자 4자리 이상을 권장합니다. 그대로 저장할까요?')) break; try{ await run(Store.call('setPin', v)); try{ localStorage.setItem('ptrec.pin', v); }catch(e){} toast(v?'PIN을 저장했습니다.':'PIN을 해제했습니다.'); loadServerInfo(); }catch(e){} break; }
     case 'backup': download(`물리치료기록_백업_${ymd()}.json`, localStorage.getItem(DB_KEY)||'{}', 'application/json'); break;
   }

@@ -236,14 +236,40 @@ const ADMIN = {
   serverInfo: (ctx) => ({ urls: lanUrls(), dataDir: cfg.dataDir, homeDir: HOME_DIR, backupDir: path.join(HOME_DIR, 'backups'), tempRun: TEMP_RUN, pinSet: !!cfg.pin, isLocal: ctx.local, version: VERSION }),
   setDataDir(ctx, dir) {
     if (!ctx.local) throw new Error('데이터 폴더는 메인 PC에서만 바꿀 수 있습니다.');
-    dir = String(dir || '').trim(); if (!dir) throw new Error('폴더 경로를 입력하세요.');
+    dir = String(dir || '').trim().replace(/^["']|["']$/g, '');
+    if (!dir) throw new Error('폴더 경로를 입력하세요.');
+    if (/^[a-z]+:\/\//i.test(dir) || /drive\.google\.com/i.test(dir))
+      throw new Error('웹 주소(링크)가 아니라 이 PC의 폴더 경로를 입력해야 합니다. 예) G:\\내 드라이브\\물리치료기록 — [구글 드라이브 폴더 찾기] 버튼을 누르면 자동으로 채워집니다.');
+    if (!path.isAbsolute(dir)) throw new Error('드라이브 문자부터 전체 경로를 입력하세요. 예) G:\\내 드라이브\\물리치료기록');
+    const root = path.parse(dir).root;
+    if (!fs.existsSync(root))
+      throw new Error(`${root} 드라이브를 찾을 수 없습니다. 구글 드라이브라면 이 PC에 'Google Drive 데스크톱' 프로그램이 설치·로그인돼 있어야 합니다.`);
     dir = path.resolve(dir);
-    fs.mkdirSync(dir, { recursive: true });
-    const probe = path.join(dir, '.write-test'); fs.writeFileSync(probe, 'ok'); fs.unlinkSync(probe);
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const probe = path.join(dir, '.write-test'); fs.writeFileSync(probe, 'ok'); fs.unlinkSync(probe);
+    } catch (e) {
+      throw new Error(`이 폴더에 저장할 수 없습니다 (${e.code || e.message}). 폴더 권한이나 구글 드라이브 로그인 상태를 확인하세요: ${dir}`);
+    }
     const hasData = fs.existsSync(path.join(dir, 'records')) || fs.existsSync(path.join(dir, 'patients.json'));
     if (!hasData && fs.existsSync(cfg.dataDir) && path.resolve(cfg.dataDir) !== dir) fs.cpSync(cfg.dataDir, dir, { recursive: true, filter: src => !/\.tmp$/.test(src) });
     cfg.dataDir = dir; saveConfig(); cache.clear(); bump();
     return { dataDir: dir, copied: !hasData };
+  },
+  /** 이 PC의 구글 드라이브(데스크톱) 폴더 후보 찾기 */
+  findDriveFolders(ctx) {
+    if (!ctx.local) throw new Error('메인 PC에서만 사용할 수 있습니다.');
+    const names = ['내 드라이브', 'My Drive'], cands = [];
+    if (process.platform === 'win32') for (const L of 'DEFGHIJKLMNOPQRSTUVWXYZ') for (const n of names) cands.push(`${L}:\\${n}`);
+    const home = os.homedir();
+    for (const base of [home, path.join(home, 'Google Drive'), path.join(home, 'GoogleDrive')]) for (const n of names) cands.push(path.join(base, n));
+    cands.push(path.join(home, 'Google Drive'));
+    const seen = new Set(), out = [];
+    for (const c of cands) {
+      try { if (!seen.has(c) && fs.statSync(c).isDirectory()) { seen.add(c); out.push({ root: c, target: path.join(c, '물리치료기록') }); } } catch (e) {}
+    }
+    // 'Google Drive' 폴더 안에 '내 드라이브'가 있으면 바깥 폴더는 빼기
+    return out.filter(o => !out.some(x => x !== o && x.root.startsWith(o.root + path.sep)));
   },
   setPin(ctx, pin) {
     if (!ctx.local) throw new Error('PIN은 메인 PC에서만 바꿀 수 있습니다.');
