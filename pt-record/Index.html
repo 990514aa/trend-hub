@@ -40,26 +40,43 @@ main{padding:14px 16px 60px;max-width:1500px;margin:0 auto}
 .muted{color:var(--muted)} .small{font-size:13px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
 h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
-/* board */
-.board{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;margin-top:12px}
-.beds{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;align-content:start}
-.bed{position:relative;min-height:138px;border-radius:var(--radius);border:1.5px dashed #c8d0dc;background:transparent;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:4px}
-.bed .no{font-weight:800;font-size:13px;color:var(--muted)}
-.bed.empty{align-items:flex-start;justify-content:space-between;color:var(--muted)}
-.bed.empty:hover{border-color:var(--pri);color:var(--pri);background:var(--pri-soft)}
-.bed.empty.pick{border-color:var(--pri);border-style:solid;background:var(--pri-soft)}
-.bed.run{border:1.5px solid #bcd0fb;background:var(--panel);cursor:default}
-.bed.run.soon{border-color:var(--warn);background:var(--warn-soft)}
-.bed.run.over{border-color:var(--bad);background:var(--bad-soft);animation:pulse 1.2s infinite}
-@keyframes pulse{50%{box-shadow:0 0 0 4px rgba(220,38,38,.18)}}
-.bed .pt{font-weight:700;font-size:15px}
-.bed .mods{font-size:12.5px;color:var(--muted)}
-.bed .timer{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
-.bed.soon .timer{color:var(--warn)} .bed.over .timer{color:var(--bad)}
-.bar{height:5px;background:#e6ebf2;border-radius:3px;overflow:hidden}
+/* 배치도 */
+.floor{margin-top:12px;background:var(--panel);border:4px solid #3b4556;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:12px}
+.strip{border:3px solid #3b4556;border-radius:3px;padding:8px;display:grid;grid-template-columns:repeat(var(--pairs),minmax(0,1fr));gap:10px}
+.pair{display:grid;grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:5px;background:#eef2f7;border-radius:7px;padding:5px}
+.floor-mid{min-height:70px;display:flex;align-items:center;justify-content:center;color:#b6bfcc;font-weight:800;letter-spacing:4px;font-size:18px}
+.floor-bottom{display:grid;grid-template-columns:1.25fr .9fr 1fr 1fr;gap:12px;align-items:stretch}
+.zone{border:3px solid #3b4556;border-radius:3px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-weight:700;min-height:80px}
+.station,.lounge{align-self:end;height:90px;background:#f8fafc}
+.lounge{height:auto}
+.door{border:0;align-items:flex-end;padding-bottom:0}
+.door span{border-top:6px solid var(--pri);padding-top:4px;width:70%;text-align:center;color:var(--pri)}
+.exroom{flex-direction:column;align-items:stretch;justify-content:flex-start;padding:6px;gap:5px}
+.zone-t{font-size:12px;text-align:center}
+.tile{position:relative;min-height:128px;border-radius:8px;display:flex;flex-direction:column;min-width:0}
+.tile .no{font-weight:800;font-size:15px}
+.tile.empty{border:1.5px dashed #b9c3d1;background:#fff;align-items:center;justify-content:center;gap:2px;color:var(--muted);padding:6px}
+.tile.empty .no{position:absolute;top:5px;left:8px}
+.tile.empty .plus{font-size:22px;line-height:1}
+.tile.empty .hint{font-size:11.5px}
+.tile.empty:hover,.tile.empty.pick{border:1.5px solid var(--pri);color:var(--pri);background:var(--pri-soft)}
+.tile.run{border:1.5px solid #9db8f5;background:#fff;padding:0 0 5px}
+.tile.run.soon{border-color:var(--warn);background:var(--warn-soft)}
+.tile.run.over{border-color:var(--bad);background:var(--bad-soft);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 4px rgba(220,38,38,.2)}}
+.tile-body{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:5px 7px 3px;flex:1;min-width:0}
+.tile-body .row{gap:4px}
+.tile .pt{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .mods{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .timer{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;white-space:nowrap}
+.tile.soon .timer{color:var(--warn)} .tile.over .timer{color:var(--bad);font-size:16px}
+.bar{display:block;height:5px;background:#e6ebf2;border-radius:3px;overflow:hidden;margin-top:2px}
 .bar b{display:block;height:100%;background:var(--pri)}
-.bed.soon .bar b{background:var(--warn)} .bed.over .bar b{background:var(--bad)}
-.bed .acts{display:flex;gap:4px;margin-top:auto;flex-wrap:wrap}
+.tile.soon .bar b{background:var(--warn)} .tile.over .bar b{background:var(--bad)}
+.tile-go{margin:0 5px;padding:3px 0}
+.lists{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media (max-width:1100px){.strip{grid-template-columns:repeat(3,minmax(0,1fr))}.floor-bottom{grid-template-columns:1fr 1fr}.station,.door{display:none}}
+@media (max-width:700px){.strip{grid-template-columns:repeat(2,minmax(0,1fr))}.lists{grid-template-columns:1fr}}
 .side{display:flex;flex-direction:column;gap:12px}
 .list{display:flex;flex-direction:column;gap:6px}
 .item{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel);display:flex;gap:8px;align-items:center}
@@ -113,7 +130,6 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
 .banner{background:var(--warn-soft);color:#8a4b00;border-bottom:1px solid #f3d9a6;padding:7px 16px;font-size:13px}
 .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:14px}
 .empty-note{padding:18px;text-align:center;color:var(--muted)}
-@media (max-width:900px){.board{grid-template-columns:1fr}.beds{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}}
 @media print{
   header,nav,.no-print,.banner,#toast{display:none!important}
   body{background:#fff} main{padding:0}
@@ -286,7 +302,7 @@ const PRESETS = {
   ],
 };
 const DEFAULT_SETTINGS = {
-  rooms:[{id:'pt', name:'물리치료실', beds:12}, {id:'ex', name:'운동·특수치료실', beds:6}],
+  rooms:[{id:'pt', name:'물리치료실', beds:12, first:1}, {id:'ex', name:'운동·특수치료실', beds:2, first:13}],
   doctors:[], therapists:[],
   sites:['C-spine','T-spine','L-spine','Shoulder','Elbow','Wrist','Hand','Hip','Knee','Ankle','Foot','Upper trapezius','Scapular area','Buttock','Thigh','Calf'],
   showCode:true,
@@ -620,60 +636,83 @@ function statusTag(r){
 }
 const modNames = r => r.items.map(i=>MOD(i.mid)?.en||MOD(i.mid)?.name||i.mid).join(' + ');
 
+/* 치료실 배치도: 위쪽 벽을 따라 1~12번(2개씩), 아래 스테이션·출입구·13·14번 방·휴게실 */
+const bedNums = room => Array.from({length:room.beds}, (_,i)=>(room.first||1)+i);
+function bedTile(room, b){
+  const r=S.records.find(x=>x.status==='running' && x.date===S.date && x.room===room.id && +x.bed===b);
+  if(!r) return `<button class="tile empty ${S.pickWaiting?'pick':''}" data-act="start" data-room="${room.id}" data-bed="${b}" title="${b}번 베드 치료 시작"><span class="no">${b}</span><span class="plus">＋</span><span class="hint">${S.pickWaiting?'여기에 배정':'치료 시작'}</span></button>`;
+  const p=curPhase(r), ph=phasesOf(r), last=p===ph[ph.length-1];
+  const nm=id=>MOD(id)?.en||MOD(id)?.name||id;
+  const cur=r.items.filter(i=>i.phase===p).map(i=>nm(i.mid)).join('+');
+  const nxt=ph.length>1&&!last ? ` → ${r.items.filter(i=>i.phase===ph[ph.indexOf(p)+1]).map(i=>nm(i.mid)).join('+')}` : '';
+  return `<div class="tile run" data-rid="${r.id}">
+    <button class="tile-body" data-act="bedMenu" data-id="${r.id}" title="베드 메뉴">
+      <span class="row"><span class="no">${b}</span><span class="grow"></span>${ph.length>1?`<span class="tag">${ph.indexOf(p)+1}/${ph.length}단계</span>`:''}</span>
+      <span class="pt">${esc(r.name)}</span>
+      <span class="mods">${esc(cur)}${esc(nxt)}</span>
+      <span class="timer" data-timer="${r.id}">--:--</span>
+      <span class="bar"><b data-bar="${r.id}" style="width:0"></b></span>
+    </button>
+    <button class="btn sm ${last?'ok':'pri'} tile-go" data-act="advance" data-id="${r.id}">${last?'종료':'다음 ▶'}</button>
+  </div>`;
+}
 function renderBoard(){
-  const room=S.settings.rooms.find(r=>r.id===S.room)||S.settings.rooms[0];
-  const running=S.records.filter(r=>r.status==='running' && r.room===room.id);
+  const [pt, ex] = [S.settings.rooms.find(r=>r.id==='pt'), S.settings.rooms.find(r=>r.id==='ex')];
   const waiting=S.records.filter(r=>r.status==='waiting').sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   const pend=S.records.filter(r=>r.status==='ended').sort((a,b)=>(a.endAt||'').localeCompare(b.endAt||''));
   const stale=S.records.filter(r=>r.status==='running' && r.date!==S.date);
-  let beds='';
-  for(let b=1;b<=room.beds;b++){
-    const r=running.find(x=>+x.bed===b && x.date===S.date);
-    if(!r){ beds+=`<button class="bed empty ${S.pickWaiting?'pick':''}" data-act="start" data-bed="${b}"><span class="no">${b}번 베드</span><span>＋ ${S.pickWaiting?'여기에 배정':'치료 시작'}</span></button>`; continue; }
-    const p=curPhase(r), ph=phasesOf(r), last=p===ph[ph.length-1];
-    const cur=r.items.filter(i=>i.phase===p).map(i=>MOD(i.mid)?.en||MOD(i.mid)?.name).join('+');
-    const nxt=ph.length>1&&!last ? ` → ${r.items.filter(i=>i.phase===ph[ph.indexOf(p)+1]).map(i=>MOD(i.mid)?.en).join('+')}` : '';
-    beds+=`<div class="bed run" data-rid="${r.id}">
-      <div class="row"><span class="no">${b}번 베드</span><span class="grow"></span><span class="small muted">${hm(r.startAt)} 시작</span></div>
-      <div class="pt">${esc(r.regNo)} ${esc(r.name)} <span class="tag">${esc(r.visit||'외래')}</span></div>
-      <div class="mods">${esc(cur)}${esc(nxt)}${ph.length>1?` <span class="tag">${ph.indexOf(p)+1}/${ph.length}단계</span>`:''}</div>
-      <div class="timer" data-timer="${r.id}">--:--</div>
-      <div class="bar"><b data-bar="${r.id}" style="width:0"></b></div>
-      <div class="acts">
-        <button class="btn sm ${last?'ok':'pri'}" data-act="advance" data-id="${r.id}">${last?'종료':'다음 단계'}</button>
-        <button class="btn sm" data-act="extend" data-id="${r.id}">+5분</button>
-        <button class="btn sm" data-act="edit" data-id="${r.id}">기록</button>
-        <button class="btn sm bad" data-act="cancelRun" data-id="${r.id}">취소</button>
-      </div></div>`;
-  }
+  const busy = room => S.records.filter(x=>x.status==='running'&&x.date===S.date&&x.room===room.id).length;
+  const ptNums=bedNums(pt), pairs=[];
+  for(let i=0;i<ptNums.length;i+=2) pairs.push(ptNums.slice(i,i+2));
   return `
   <div class="row">
-    <div class="seg">${S.settings.rooms.map(r=>`<button data-act="room" data-room="${r.id}" class="${r.id===room.id?'on':''}">${esc(r.name)} <span class="small">(${S.records.filter(x=>x.status==='running'&&x.room===r.id).length}/${r.beds})</span></button>`).join('')}</div>
+    <b>${esc(pt.name)}</b><span class="muted small">${busy(pt)}/${pt.beds} 사용</span>
+    <b style="margin-left:10px">${esc(ex.name)}</b><span class="muted small">${busy(ex)}/${ex.beds} 사용</span>
     <span class="grow"></span>
     ${S.pickWaiting?`<span class="tag wait">대기 환자 배정 중 — 빈 베드를 누르세요</span><button class="btn sm" data-act="pickCancel">배정 취소</button>`:''}
   </div>
-  <div class="board">
-    <div>${stale.length?`<div class="errbox" style="margin-bottom:10px">종료 처리되지 않은 지난 치료 ${stale.length}건: ${stale.map(r=>`<button class="btn sm" data-act="edit" data-id="${r.id}" data-date="${r.date}">${esc(r.date.slice(5))} ${esc(r.name)}</button>`).join(' ')} — 열어서 종료 시각을 입력하세요.</div>`:''}<div class="beds">${beds}</div></div>
-    <div class="side">
-      <div class="panel">
-        <div class="row"><h2 class="grow" style="margin:0">작성 대기 <span class="muted">${pend.length}</span></h2></div>
-        <p class="small muted" style="margin:4px 0 8px">치료가 끝나 경과 기록이 필요한 건</p>
-        <div class="list">${pend.map(r=>`<div class="item"><div class="grow"><b>${esc(r.regNo)} ${esc(r.name)}</b><div class="small muted">${r.date!==S.date?`<b style="color:var(--bad)">${r.date.slice(5)}</b> `:''}${hm(r.startAt)}~${hm(r.endAt)} · ${esc(modNames(r))}</div></div><button class="btn sm pri" data-act="edit" data-id="${r.id}" data-date="${r.date}">작성</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
-      </div>
-      <div class="panel">
-        <div class="row"><h2 class="grow" style="margin:0">대기 환자 <span class="muted">${waiting.length}</span></h2><button class="btn sm" data-act="paste">접수명단 붙여넣기</button></div>
-        <p class="small muted" style="margin:4px 0 8px">환자를 누른 뒤 빈 베드를 누르면 배정됩니다</p>
-        <div class="list">${waiting.map(r=>`<div class="item ${S.pickWaiting===r.id?'sel':''}"><button class="grow" style="all:unset;cursor:pointer;flex:1" data-act="pick" data-id="${r.id}"><b>${esc(r.regNo)} ${esc(r.name)}</b><div class="small muted">${hm(r.createdAt)} 접수${r.memo?' · '+esc(r.memo):''}</div></button><button class="btn sm bad" data-act="unwait" data-id="${r.id}">✕</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
-      </div>
+  ${stale.length?`<div class="errbox" style="margin-top:10px">종료 처리되지 않은 지난 치료 ${stale.length}건: ${stale.map(r=>`<button class="btn sm" data-act="edit" data-id="${r.id}" data-date="${r.date}">${esc(r.date.slice(5))} ${esc(r.name)}</button>`).join(' ')} — 열어서 종료 시각을 입력하세요.</div>`:''}
+  <div class="floor">
+    <div class="strip" style="--pairs:${pairs.length}">${pairs.map(pr=>`<div class="pair">${pr.map(b=>bedTile(pt,b)).join('')}</div>`).join('')}</div>
+    <div class="floor-mid"><span>${esc(pt.name)}</span></div>
+    <div class="floor-bottom">
+      <div class="zone station">스테이션</div>
+      <div class="zone door"><span>출입구</span></div>
+      <div class="zone exroom"><div class="zone-t">${esc(ex.name)}</div><div class="pair" style="--n:${Math.min(ex.beds,2)}">${bedNums(ex).map(b=>bedTile(ex,b)).join('')}</div></div>
+      <div class="zone lounge">휴게실</div>
+    </div>
+  </div>
+  <div class="lists">
+    <div class="panel">
+      <div class="row"><h2 class="grow" style="margin:0">작성 대기 <span class="muted">${pend.length}</span></h2></div>
+      <p class="small muted" style="margin:4px 0 8px">치료가 끝나 경과 기록이 필요한 건</p>
+      <div class="list">${pend.map(r=>`<div class="item"><div class="grow"><b>${esc(r.regNo)} ${esc(r.name)}</b> <span class="small muted">${r.bed?r.bed+'번':''}</span><div class="small muted">${r.date!==S.date?`<b style="color:var(--bad)">${r.date.slice(5)}</b> `:''}${hm(r.startAt)}~${hm(r.endAt)} · ${esc(modNames(r))}</div></div><button class="btn sm pri" data-act="edit" data-id="${r.id}" data-date="${r.date}">작성</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2 class="grow" style="margin:0">대기 환자 <span class="muted">${waiting.length}</span></h2><button class="btn sm" data-act="paste">접수명단 붙여넣기</button></div>
+      <p class="small muted" style="margin:4px 0 8px">환자를 누른 뒤 배치도에서 빈 베드를 누르면 배정됩니다</p>
+      <div class="list">${waiting.map(r=>`<div class="item ${S.pickWaiting===r.id?'sel':''}"><button class="grow" style="all:unset;cursor:pointer;flex:1" data-act="pick" data-id="${r.id}"><b>${esc(r.regNo)} ${esc(r.name)}</b><div class="small muted">${hm(r.createdAt)} 접수${r.memo?' · '+esc(r.memo):''}</div></button><button class="btn sm bad" data-act="unwait" data-id="${r.id}">✕</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
     </div>
   </div>`;
+}
+function openBedMenu(r){
+  const p=curPhase(r), ph=phasesOf(r), last=p===ph[ph.length-1];
+  openDlg(`<div class="dlg-h"><h2>${r.bed}번 베드 — ${esc(r.regNo)} ${esc(r.name)}</h2><span class="tag">${esc(r.visit||'외래')}</span><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
+  <div class="dlg-b">
+    <div class="kv"><span class="muted">시작</span><span>${hm(r.startAt)} · 시행자 ${esc(r.therapist||'-')}</span>
+    ${r.items.map(i=>`<span class="muted">${ph.length>1?ph.indexOf(i.phase)+1+'단계':''}</span><span>${esc(MOD(i.mid)?.name||i.mid)} ${i.min}분 · ${i.start?hm(i.start)+'~'+(i.end?hm(i.end):''):'대기'}${i.phase===p&&!i.end?' <span class="tag run">진행 중</span>':''}</span>`).join('')}</div>
+  </div>
+  <div class="dlg-f"><button class="btn bad" data-act="cancelRun" data-id="${r.id}">치료 취소</button><span class="grow"></span>
+    <button class="btn" data-act="edit" data-id="${r.id}">기록 보기·수정</button>
+    <button class="btn" data-act="extend" data-id="${r.id}">+5분 연장</button>
+    <button class="btn ${last?'ok':'pri'}" data-act="advance" data-id="${r.id}">${last?'치료 종료':'다음 단계 시작'}</button></div>`);
 }
 function tick(){
   const now=Date.now(); $('#clock').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   for(const r of S.records){
     if(r.status!=='running') continue;
     const el=document.querySelector(`[data-timer="${r.id}"]`); if(!el) continue;
-    const rem=recRemain(r,now); const card=el.closest('.bed');
+    const rem=recRemain(r,now); const card=el.closest('.tile');
     el.textContent = rem==null?'--:--':(rem>=0?fmtClock(rem):'초과 '+fmtClock(rem));
     card.classList.toggle('soon', rem!=null && rem>0 && rem<=60000);
     card.classList.toggle('over', rem!=null && rem<=0);
@@ -775,7 +814,8 @@ function renderSettings(){
     </div>
     <div class="panel">
       <h2>치료실 · 베드</h2>
-      ${s.rooms.map(r=>`<div class="row" style="margin-bottom:6px"><input type="text" data-room-name="${r.id}" value="${esc(r.name)}" class="grow"><input type="number" min="1" max="40" data-room-beds="${r.id}" value="${r.beds}" style="width:80px"> 베드</div>`).join('')}
+      ${s.rooms.map(r=>`<div class="row" style="margin-bottom:6px"><input type="text" data-room-name="${r.id}" value="${esc(r.name)}" class="grow"><input type="number" min="1" max="40" data-room-beds="${r.id}" value="${r.beds}" style="width:70px"> 베드 · 번호 <input type="number" min="1" max="99" data-room-first="${r.id}" value="${r.first||1}" style="width:64px">번부터</div>`).join('')}
+      <p class="small muted" style="margin:4px 0 0">배치도: ${esc(s.rooms[0].name)}은 위쪽 벽을 따라 2개씩, ${esc(s.rooms[1].name)}은 아래 오른쪽 방(휴게실 옆)에 표시됩니다.</p>
       <label class="row small" style="margin-top:6px"><input type="checkbox" id="stShowCode" ${s.showCode?'checked':''}> 기록문에 수가코드 표시</label>
     </div>
     <div class="panel"><h2>처방의 명단</h2><textarea id="stDoctors" rows="5" placeholder="한 줄에 한 명">${esc(s.doctors.join('\n'))}</textarea></div>
@@ -1057,7 +1097,9 @@ document.addEventListener('click', async ev=>{
   switch(act){
     case 'close': closeDlg(); break;
     case 'room': S.room=a.dataset.room; S.local.room=S.room; saveLocal(); render(); break;
+    case 'bedMenu': if(rec) openBedMenu(rec); break;
     case 'start': {
+      S.room=a.dataset.room||S.room;
       const w = S.pickWaiting && S.records.find(r=>r.id===S.pickWaiting);
       openStart(+a.dataset.bed, w); break; }
     case 'pick': S.pickWaiting = S.pickWaiting===id?null:id; render(); break;
@@ -1070,10 +1112,10 @@ document.addEventListener('click', async ev=>{
     case 'advance': {
       const r=withBase(rec); const t=nowIso(); advance(r,t);
       await saveRecord(r);
-      if(r.status==='ended'){ toast(`${r.bed}번 베드 종료 — 경과 기록을 작성하세요.`); openEdit(r.id); }
+      if(r.status==='ended'){ toast(`${r.bed}번 베드 종료 — 경과 기록을 작성하세요.`); openEdit(r.id); } else closeDlg();
       break; }
-    case 'extend': { const r=withBase(rec); const p=curPhase(r); r.items.forEach(i=>{ if(i.phase===p&&!i.end) i.min+=5; }); [...S.alarmed].filter(k=>k.startsWith(r.id)).forEach(k=>S.alarmed.delete(k)); await saveRecord(r); break; }
-    case 'cancelRun': { const why=prompt('치료 취소 사유 (예: 환자 거부, 잘못 입력)'); if(why===null) break; const r=withBase(rec); r.status='cancelled'; r.cancelReason=why; r.endAt=nowIso(); await saveRecord(r); break; }
+    case 'extend': { const r=withBase(rec); const p=curPhase(r); r.items.forEach(i=>{ if(i.phase===p&&!i.end) i.min+=5; }); closeDlg(); [...S.alarmed].filter(k=>k.startsWith(r.id)).forEach(k=>S.alarmed.delete(k)); await saveRecord(r); break; }
+    case 'cancelRun': { const why=prompt('치료 취소 사유 (예: 환자 거부, 잘못 입력)'); if(why===null) break; const r=withBase(rec); r.status='cancelled'; r.cancelReason=why; r.endAt=nowIso(); closeDlg(); await saveRecord(r); break; }
     case 'edit': openEdit(id, a.dataset.date||S.date); break;
     case 'emrReset': { const d=$('#dlg'); d._override=false; $('#eOvNote').textContent=''; a.hidden=true; d._upd(); break; }
     case 'copyEmr': if(await copyText($('#eEmr').value)) toast('기록문을 복사했습니다.'); break;
@@ -1139,7 +1181,7 @@ async function saveSettingsForm(){
   const lines=id=>$('#'+id).value.split('\n').map(s=>s.trim()).filter(Boolean);
   S.local.device=$('#stDevice').value.trim(); S.local.sound=$('#stSound').checked; S.local.voice=$('#stVoice').checked; saveLocal();
   const s=clone(S.settings);
-  s.rooms=s.rooms.map(r=>({...r, name:$(`[data-room-name="${r.id}"]`).value.trim()||r.name, beds:Math.min(40,Math.max(1,parseInt($(`[data-room-beds="${r.id}"]`).value)||r.beds))}));
+  s.rooms=s.rooms.map(r=>({...r, name:$(`[data-room-name="${r.id}"]`).value.trim()||r.name, beds:Math.min(40,Math.max(1,parseInt($(`[data-room-beds="${r.id}"]`).value)||r.beds)), first:Math.max(1,parseInt($(`[data-room-first="${r.id}"]`).value)||r.first||1)}));
   s.doctors=lines('stDoctors'); s.therapists=lines('stTherapists'); s.sites=lines('stSites'); s.showCode=$('#stShowCode').checked;
   s.phrases={pre:lines('stPre'), during:lines('stDuring'), post:lines('stPost')};
   s.mods={};
