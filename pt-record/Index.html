@@ -63,11 +63,15 @@ h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
 .zone-t{font-size:12px;text-align:center}
 .tile{position:relative;min-height:128px;border-radius:8px;display:flex;flex-direction:column;min-width:0}
 .tile .no{font-weight:800;font-size:15px}
-.tile.empty{border:1.5px dashed #b9c3d1;background:#fff;align-items:center;justify-content:center;gap:2px;color:var(--muted);padding:6px}
+.tile.empty{border:1.5px dashed #b9c3d1;background:#fff;color:var(--muted)}
+.tile-main{all:unset;cursor:pointer;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px}
 .tile.empty .no{position:absolute;top:5px;left:8px}
 .tile.empty .plus{font-size:22px;line-height:1}
 .tile.empty .hint{font-size:11.5px}
 .tile.empty:hover,.tile.empty.pick{border:1.5px solid var(--pri);color:var(--pri);background:var(--pri-soft)}
+.tile .pin{position:absolute;top:4px;right:4px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:11.5px;padding:1px 6px;color:var(--muted)}
+.tile .pin:hover{border-color:#f59e0b;color:#c2410c;background:#fff7ed}
+.tile.hold{border:1.5px solid #f59e0b;background:#fff7ed;padding-bottom:5px}
 .tile.run{border:1.5px solid #9db8f5;background:#fff;padding:0 0 5px}
 .tile.run.soon{border-color:var(--warn);background:var(--warn-soft)}
 .tile.run.over{border-color:var(--bad);background:var(--bad-soft);animation:pulse 1.2s infinite}
@@ -84,8 +88,8 @@ h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
 .tile-go{margin:0 5px;padding:3px 0}
 .exfloor{border-width:3px}
 .exgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}
-.lists{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-@media (max-width:1100px){.strip{grid-template-columns:repeat(3,minmax(0,1fr))}.floor-bottom{grid-template-columns:1fr 1fr}.station,.door{display:none}}
+.lists{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+@media (max-width:1100px){.lists{grid-template-columns:1fr 1fr}.strip{grid-template-columns:repeat(3,minmax(0,1fr))}.floor-bottom{grid-template-columns:1fr 1fr}.station,.door{display:none}}
 @media (max-width:700px){.strip{grid-template-columns:repeat(2,minmax(0,1fr))}.lists{grid-template-columns:1fr}}
 .side{display:flex;flex-direction:column;gap:12px}
 .list{display:flex;flex-direction:column;gap:6px}
@@ -95,6 +99,9 @@ h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
 .tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:#eef1f5;color:var(--muted)}
 .tag.run{background:var(--pri-soft);color:var(--pri)} .tag.wait{background:var(--warn-soft);color:var(--warn)}
 .tag.done{background:var(--ok-soft);color:var(--ok)} .tag.cancel{background:var(--bad-soft);color:var(--bad)}
+.tag.ins-ta{background:#ffe3e3;color:#b42318;font-weight:800}
+.tag.ins-etc{background:#e8f1ff;color:#1d4ed8}
+.tag.hold{background:#ffedd5;color:#c2410c}
 .tag.emrok{background:#e9e4ff;color:#5b3fd6}
 .tag{white-space:nowrap}
 /* forms */
@@ -177,6 +184,10 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
  * 강도 기본값은 일반적 임상 적용 범위이며, 실제 처방·장비 설정값으로 수정해 기록한다.
  * ===================================================================== */
 const POS = ['Prone','Supine','Sitting','Side-lying'];
+const INS = ['건강보험','자보','산재','일반'];   // 보험 구분 (자보 = 자동차보험, TA)
+const inRoom = (m, room) => !!m && (m.room===room || (m.alsoRooms||[]).includes(room));
+const insTag = r => r.ins && r.ins!=='건강보험' ? `<span class="tag ins-${r.ins==='자보'?'ta':'etc'}">${esc(r.ins)}</span>` : '';
+const siteCount = r => (r.sites||[]).length + (r.siteEtc ? r.siteEtc.split(/[,，]/).filter(x=>x.trim()).length : 0);
 const MODALITIES = [
   // 표층열치료(MM010) 처방을 적외선 열치료로 시행 — 적외선치료는 표층열치료(사-101)에 포함되는 행위
   { id:'hotpack', name:'표층열치료(적외선)', en:'IR', code:'MM010', coverage:'급여', room:'pt', min:15, phase:1, enabled:true, dailyOnce:true, group:'heat', autoStop:true,
@@ -259,16 +270,14 @@ const MODALITIES = [
     ],
     tpl:'Weight Hold {hold}kg / Rest {rest}kg, Hold {holdSec}sec / Rest {restSec}sec(간헐적), 자세 {pos}, {belt}',
     basis:'간헐적견인치료-골반견인(MM052): 경추견인과 같은 전문의 상근·지시 요건.' },
-  { id:'simpleEx', name:'단순운동치료', en:'Simple therapeutic exercise', code:'MM101', coverage:'급여', room:'ex', min:15, phase:1, enabled:true, format:'soap', minReq:10, group:'exercise',
+  // 물리치료실에서도 IR·ICT와 함께 시행 (끝나고 이어서 / 먼저 하고 ICT). 기록: 시행운동·부위·소요시간
+  { id:'simpleEx', name:'단순운동치료', en:'Simple ex.', code:'MM101', coverage:'급여', room:'ex', alsoRooms:['pt'], min:10, phase:3, orderChoice:true, enabled:true, format:'simple', minReq:10, group:'exercise',
     fields:[
-      {k:'types', label:'운동 종류', type:'multi', options:['PROM','AAROM','AROM','Stretching','자세교정운동','근력강화운동','이완운동']},
-      {k:'s', label:'[S] 환자 주관적 호소', type:'textarea'},
-      {k:'o', label:'[O] 객관적 평가 (ROM·MMT·VAS 등)', type:'textarea', req:true},
-      {k:'a', label:'[A] 치료사 소견', type:'textarea'},
-      {k:'p', label:'[P] 치료 내용', type:'textarea', req:true},
+      {k:'types', label:'시행운동', type:'multi', options:['ROM exercise','Stretching','PROM','AAROM','AROM','자세교정운동','근력강화운동','이완운동'], def:['ROM exercise','Stretching']},
+      {k:'note', label:'특이사항(선택)', type:'textarea'},
     ],
     basis:'단순운동치료(사-106, MM101): 근육·관절기능장애에 각종 운동·자세교정운동 등을 10분 이상 실시한 경우 산정. 제2절 운동치료·제3절 재활기능치료와 동시에 실시하면 주된 항목만 산정.' },
-  { id:'complexEx', name:'운동치료-복합운동치료', en:'Complex exercise', code:'MM102', coverage:'급여', room:'ex', min:30, phase:1, enabled:true, format:'soap', minReq:30, group:'exercise',
+  { id:'complexEx', name:'운동치료-복합운동치료', en:'Complex exercise', code:'MM102', coverage:'급여', room:'ex', min:30, phase:3, orderChoice:true, enabled:true, format:'soap', minReq:30, group:'exercise',
     fields:[
       {k:'types', label:'사용 기구·훈련', type:'multi', options:['Isotonic equipment','Aerobic equipment(자전거·트레드밀)','MedX','CPM','모래주머니·탄력밴드 저항운동','PRE(점진적 저항운동)','균형·보행훈련']},
       {k:'s', label:'[S] 환자 주관적 호소', type:'textarea'},
@@ -310,11 +319,15 @@ const PRESETS = {
     {name:'Cryo + ICT', items:['cryo','ict']},
     {name:'IR + 경추견인', items:['hotpack','tractC']},
     {name:'IR + 골반견인', items:['hotpack','tractL']},
+    {name:'Cryo', items:['cryo']},
+    {name:'IR + ICT → 단순운동', items:['hotpack','ict','simpleEx'], order:{simpleEx:'after'}},
+    {name:'단순운동 → ICT', items:['simpleEx','ict'], order:{simpleEx:'before'}},
   ],
   ex:[
     {name:'도수', items:['manual']},
     {name:'충격파', items:['eswt']},
     {name:'단순운동', items:['simpleEx']},
+    {name:'도수 → 단순운동', items:['manual','simpleEx'], order:{simpleEx:'after'}},
     {name:'복합운동', items:['complexEx']},
   ],
 };
@@ -322,7 +335,7 @@ const DEFAULT_SETTINGS = {
   rooms:[{id:'pt', name:'물리치료실', beds:12, first:1}, {id:'ex', name:'운동·특수치료실', beds:4, first:1}],
   hospital:'연세오케이정형외과',
   doctors:[], therapists:[],
-  sites:['C-spine','T-spine','L-spine','Shoulder','Elbow','Wrist','Hand','Hip','Knee','Ankle','Foot','Upper trapezius','Scapular area','Buttock','Thigh','Calf'],
+  sites:['Neck','C-spine','T-spine','L-spine','Shoulder','Elbow','Wrist','Hand','Hip','Knee','Ankle','Foot','Upper trapezius','Scapular area','Buttock','Thigh','Calf'],
   showCode:true,
   mods:{},              // 항목별 사용자 변경값 {id:{name,code,coverage,min,room,enabled,phase}}
   phrases:null,         // null이면 기본 문구
@@ -386,7 +399,7 @@ const LocalStore = {
     const hits=Object.values(db.patients).filter(p=>p.regNo.startsWith(q)||(p.name||'').includes(q));
     hits.sort((a,b)=>(b.regNo.startsWith(q)-a.regNo.startsWith(q)) || String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
     return hits.slice(0,10).map(p=>({regNo:p.regNo, name:p.name, memo:p.memo||'', last:p.plan?{date:p.plan.date, items:(p.plan.items||[]).map(i=>i.mid)}:null})); },
-  async getPatient(regNo){ const db=this.db(); return {patient:db.patients[regNo]||null, records:Object.values(db.records).filter(r=>r.regNo===regNo && r.status!=='waiting').sort((a,b)=>(b.startAt||'').localeCompare(a.startAt||''))}; },
+  async getPatient(regNo){ const db=this.db(); return {patient:db.patients[regNo]||null, records:Object.values(db.records).filter(r=>r.regNo===regNo && !['waiting','hold'].includes(r.status)).sort((a,b)=>(b.startAt||'').localeCompare(a.startAt||''))}; },
   async savePatient(p){ const db=this.db(); db.patients[p.regNo]={...(db.patients[p.regNo]||{}), ...p, updatedAt:nowIso()}; this.put(db); return {patient:db.patients[p.regNo]}; },
   async saveSettings(s){ const db=this.db(); db.settings=s; this.put(db); return {settings:s}; },
   async listRange(from, to){ return Object.values(this.db().records).filter(r=>r.date>=from && r.date<=to); },
@@ -437,7 +450,7 @@ function inBoard(r, date){
 function rememberPatient(patients, rec){
   const p = patients[rec.regNo] || {regNo:rec.regNo, memo:''};
   p.name = rec.name;
-  p.plan = {room:rec.room, visit:rec.visit, dx:rec.dx, sites:rec.sites, side:rec.side, doctor:rec.doctor,
+  p.plan = {room:rec.room, visit:rec.visit, ins:rec.ins, dx:rec.dx, sites:rec.sites, side:rec.side, doctor:rec.doctor,
             items:rec.items.map(i=>({mid:i.mid, min:i.min, phase:i.phase, params:i.params})), date:rec.date};
   p.updatedAt = nowIso(); patients[rec.regNo]=p;
 }
@@ -474,36 +487,58 @@ const mods = () => MODALITIES.map(m=>MOD(m.id));
 const phrases = k => (S.settings.phrases && S.settings.phrases[k] && S.settings.phrases[k].length) ? S.settings.phrases[k] : PHRASES[k];
 const roomName = id => (S.settings.rooms.find(r=>r.id===id)||{}).name || id;
 
-/* ===================== 치료 진행(단계) 계산 =====================
- * 같은 단계(phase) 항목은 동시에, 다음 단계는 앞 단계 종료 후 순서대로 진행.
- * autoStop 항목(ICT·레이저·견인 등 자동타이머 장비)은 설정 시간이 지나면 장비가 멈추므로
- * 종료 시각 = min(종료 버튼 시각, 시작+설정시간). 그 외(핫팩 등)는 실제 종료 버튼 시각.     */
+/* ===================== 치료 진행 (시간표) =====================
+ * 순서(phase)가 같은 항목은 동시에, 다음 순서는 앞 순서가 끝나는 시각에 '자동으로' 이어서 시작한다.
+ * 시작할 때 전체 시간표를 정하고 [종료] 한 번으로 끝낸다 (중간에 버튼을 늦게 눌러 시각이 틀어지지 않게).
+ * autoStop 항목(IR·ICT·레이저·견인 등 자동타이머 장비)은 종료 시각 = min(종료 버튼, 시작+설정시간).
+ * 마지막 순서의 수동 항목(콜드팩·단순운동 등)은 종료 버튼을 누른 실제 시각. */
 const phasesOf = r => [...new Set(r.items.map(i=>i.phase))].sort((a,b)=>a-b);
-const curPhase = r => { for(const p of phasesOf(r)) if(r.items.some(i=>i.phase===p && !i.end)) return p; return null; };
-const itemRemain = (it, now) => it.start ? new Date(it.start).getTime() + it.min*60000 - now : null;
+const tms = iso => new Date(iso).getTime();
+const phaseStart = (r,p) => r.items.filter(i=>i.phase===p && i.start).map(i=>i.start).sort()[0] || null;
+const phaseEnd = (r,p) => { const its=r.items.filter(i=>i.phase===p && i.start); return its.length ? Math.max(...its.map(i=>tms(i.start)+i.min*60000)) : null; };
+/** 뒤 순서 항목의 시작 시각 = 앞 순서의 예정 종료 시각 (연장·수정 후 다시 계산) */
+function schedule(r){
+  let cursor=null;
+  for(const p of phasesOf(r)){
+    const its=r.items.filter(i=>i.phase===p);
+    if(cursor!=null) its.forEach(i=>{ if(!i.end) i.start=new Date(cursor).toISOString(); });
+    const e=phaseEnd(r,p); if(e==null) break; cursor=e;
+  }
+  return r;
+}
+/** 지금 진행 중인 순서 */
+function curPhase(r, now=Date.now()){
+  const ph=phasesOf(r); let cur=ph[0];
+  for(const p of ph){ const st=phaseStart(r,p); if(st && tms(st)<=now) cur=p; }
+  return cur;
+}
+const lastPhase = r => phasesOf(r).slice(-1)[0];
+const itemRemain = (it, now) => it.start ? tms(it.start) + it.min*60000 - now : null;
+/** 남은 시간: 마지막 순서면 전체 종료까지, 아니면 이번 순서 끝(다음 치료 시작)까지 */
 function recRemain(r, now=Date.now()){
-  const p=curPhase(r); if(p==null) return null;
-  const its=r.items.filter(i=>i.phase===p && !i.end && i.start);
-  if(!its.length) return null;
-  return Math.max(...its.map(i=>itemRemain(i,now)));
+  if(!r.items.length) return null;
+  const p=curPhase(r,now), e=phaseEnd(r,p);
+  return e==null ? null : e-now;
 }
 function recProgress(r, now=Date.now()){
-  const p=curPhase(r); const its=r.items.filter(i=>i.phase===p && i.start);
-  if(!its.length) return 0;
-  const total=Math.max(...its.map(i=>i.min*60000)); const st=new Date(its[0].start).getTime();
-  return Math.min(1, (now-st)/total);
+  const p=curPhase(r,now), st=phaseStart(r,p), e=phaseEnd(r,p);
+  if(!st||!e) return 0;
+  return Math.min(1, Math.max(0,(now-tms(st))/(e-tms(st))));
 }
-function advance(r, t){
-  const p=curPhase(r); if(p==null) return;
-  for(const it of r.items.filter(i=>i.phase===p && !i.end)){
-    const auto = MOD(it.mid)?.autoStop;
-    const planned = new Date(new Date(it.start).getTime()+it.min*60000).toISOString();
-    it.end = (auto && planned < t) ? planned : t;
+/** [종료]: 모든 항목 종료 시각을 정하고 작성 대기로. 시작 전인 항목은 시행 안 한 것으로 보고 뺀다 */
+function finishRec(r, t){
+  schedule(r); const lp=lastPhase(r), fp=phasesOf(r)[0], dropped=[];
+  r.items = r.items.filter(it=>{
+    if(it.end) return true;
+    // 뒤 순서 항목이 아직 시작 전이면 시행 안 한 것으로 뺀다 (기기 간 시계 차이 1분은 허용, 첫 치료는 빼지 않음)
+    if(it.phase!==fp && (!it.start || tms(it.start) - tms(t) > 60000)){ dropped.push(MOD(it.mid)?.name||it.mid); return false; }
+    const planned=new Date(tms(it.start)+it.min*60000).toISOString();
+    it.end = (it.phase===lp && !MOD(it.mid)?.autoStop) ? t : (planned < t ? planned : t);
     if(it.end < it.start) it.end = it.start;   // 기기 간 시계 차이 방어
-  }
-  const next = curPhase(r);
-  if(next==null){ finalizeTimes(r); r.status='ended'; }
-  else r.items.filter(i=>i.phase===next).forEach(i=>i.start=t);
+    return true;
+  });
+  finalizeTimes(r); r.status='ended';
+  return dropped;
 }
 function finalizeTimes(r){
   const st=r.items.map(i=>i.start).filter(Boolean).sort(); const en=r.items.map(i=>i.end).filter(Boolean).sort();
@@ -529,18 +564,24 @@ function genEmr(r){
   const L=[]; const sc=S.settings.showCode;
   const st=r.items.map(i=>i.start).filter(Boolean).sort()[0], en=r.items.map(i=>i.end).filter(Boolean).sort().pop();
   const ph=phasesOf(r);
-  L.push(`■ ${roomName(r.room)} 치료기록  ${dateLabel(r.date)}  [${r.visit||'외래'}]`);
+  L.push(`■ ${roomName(r.room)} 치료기록  ${dateLabel(r.date)}  [${r.visit||'외래'}${r.ins&&r.ins!=='건강보험'?'·'+r.ins:''}]`);
   L.push(`환자: ${r.regNo} ${r.name}`);
   L.push(`처방의: ${r.doctor||'(미입력)'}   시행자: ${r.therapist||'(미입력)'}`);
   if(r.dx) L.push(`Dx(상병): ${r.dx}`);
-  const site=siteText(r); if(site) L.push(`Site(부위): ${site}`);
+  const site=siteText(r); if(site) L.push(`Site(부위): ${site}${r.ins==='자보'&&siteCount(r)>=2?` (${siteCount(r)}부위 동시 시행)`:''}`);
   if(st) L.push(`치료시간: ${hm(st)} ~ ${en?hm(en):'진행 중'}${en?` (총 ${mins(st,en)}분${ph.length>1?', 순차 시행':r.items.length>1?', 동시 시행':''})`:''}`);
   L.push('Tx(치료방법·조건):');
   r.items.forEach((it,idx) => {
     const m=MOD(it.mid)||{name:it.mid, fields:[]}; const p=paramsOf(it);
     const time = it.start ? `${hm(it.start)}~${it.end?hm(it.end):''}${it.end?` (${mins(it.start,it.end)}분)`:''}` : '';
     L.push(` ${idx+1}) ${m.name}${m.en?` ${m.en}`:''}${sc&&m.code?` [${m.code}]`:''}${m.coverage==='비급여'?' (비급여)':''}  ${time}`);
-    if(m.format==='soap'){
+    if(m.format==='simple'){
+      const types=(p.types||[]); if(types.length) L.push(`    시행운동: ${types.join(' & ')}`);
+      if(site) L.push(`    부위: ${site}`);
+      L.push(`    소요시간: ${it.start&&it.end?mins(it.start,it.end):it.min}분`);
+      if(p.note) L.push(`    특이사항: ${p.note}`);
+      for(const [k,lb] of [['s','[S]'],['o','[O]'],['a','[A]'],['p','[P]']]) if(p[k]) L.push(`    ${lb} ${p[k]}`);   // 이전 형식으로 쓴 기록
+    } else if(m.format==='soap'){
       if(p.s) L.push(`    [S] ${p.s}`);
       if(p.o) L.push(`    [O] ${p.o}`);
       if(p.a) L.push(`    [A] ${p.a}`);
@@ -579,7 +620,14 @@ function checkRecord(r, strict){
     if(!(r.pre?.phrases?.length||r.pre?.text)) err.push('치료 전 상태를 입력하세요.');
     if(!(r.post?.phrases?.length||r.post?.text)) err.push('치료 후 상태를 입력하세요.');
   }
-  const others = S.records.filter(o=>o.id!==r.id && o.regNo===r.regNo && o.date===r.date && !['cancelled','waiting'].includes(o.status));
+  if(r.ins==='자보' && siteCount(r)<2) (strict?err:warn).push('자보 환자는 두 부위 동시 시행 — 치료 부위를 2개 선택하세요.');
+  if(r.ins && r.ins!=='건강보험'){
+    for(const it of r.items){ const m=MOD(it.mid); const actual=it.start&&it.end?mins(it.start,it.end):null;
+      if(strict && !it.end) err.push(`${m?.name||it.mid}: 종료 시각이 없습니다.`);
+      if(strict) for(const f of (m&&m.fields)||[]) if(f.req){ const v=paramsOf(it)[f.k]; if(v==null||v===''||(Array.isArray(v)&&!v.length)) err.push(`${m.name}: '${f.label}' 입력 필요`); } }
+    return {warn, err};   // 자보·산재·일반은 건강보험 산정 경고 생략
+  }
+  const others = S.records.filter(o=>o.id!==r.id && o.regNo===r.regNo && o.date===r.date && !['cancelled','waiting','hold'].includes(o.status));
   const mine = r.items.map(i=>i.mid), theirs = others.flatMap(o=>o.items.map(i=>i.mid));
   const all = new Set([...mine, ...theirs]);
   const has = g => [...all].some(id => MOD(id)?.group===g);
@@ -668,17 +716,25 @@ function toast(msg, cls, ms=3500){
 function checkAlarms(){
   const now=Date.now();
   for(const r of S.records){
-    if(r.status!=='running') continue;
-    const rem=recRemain(r, now); if(rem==null) continue;
-    const p=curPhase(r); const last = p===phasesOf(r).slice(-1)[0];
-    for(const [th, tag] of [[0,'0'],[-120000,'2']]){
-      const key=`${r.id}:${p}:${tag}`;
-      if(rem<=th && !S.alarmed.has(key)){
-        S.alarmed.add(key);
-        if(rem < th-60000) continue; // 오래전에 지난 알람(화면 새로 연 경우)은 소리 생략
-        const names=r.items.filter(i=>i.phase===p).map(i=>MOD(i.mid)?.en||MOD(i.mid)?.name).join('·');
-        const msg = `${roomName(r.room)} ${bedLabel(r)} 베드 ${names} ${last?'치료 종료':'→ 다음 치료로 전환'}${tag==='2'?' (2분 경과)':''}`;
-        toast('⏰ '+msg, 'alarm', 8000); beep(); speak(`${bedLabel(r)} 베드, ${last?'치료 종료':'다음 치료'} 시간입니다.`);
+    if(r.status!=='running' || !r.items.length) continue;
+    const ph=phasesOf(r), lp=lastPhase(r);
+    // 중간: 앞 순서가 끝나고 다음 치료를 시작할 때
+    for(let k=0;k<ph.length-1;k++){
+      const e=phaseEnd(r,ph[k]); const key=`${r.id}:next:${ph[k]}:${e}`;
+      if(e!=null && now>=e && !S.alarmed.has(key)){
+        S.alarmed.add(key); if(now-e>60000) continue;
+        const nxt=r.items.filter(i=>i.phase===ph[k+1]).map(i=>MOD(i.mid)?.en||MOD(i.mid)?.name).join('·');
+        toast(`⏰ ${roomName(r.room)} ${bedLabel(r)} 베드 → ${nxt} 시작`, 'alarm', 8000); beep(); speak(`${bedLabel(r)} 베드, 다음 치료 시작입니다.`);
+      }
+    }
+    // 마지막: 치료 종료, 2분 초과
+    const e=phaseEnd(r,lp); if(e==null) continue;
+    for(const [th, tag] of [[0,'0'],[120000,'2']]){
+      const key=`${r.id}:end:${e}:${tag}`;
+      if(now>=e+th && !S.alarmed.has(key)){
+        S.alarmed.add(key); if(now-(e+th)>60000) continue;   // 오래전에 지난 알람(화면 새로 연 경우)은 소리 생략
+        const names=r.items.filter(i=>i.phase===lp).map(i=>MOD(i.mid)?.en||MOD(i.mid)?.name).join('·');
+        toast(`⏰ ${roomName(r.room)} ${bedLabel(r)} 베드 ${names} 치료 종료${tag==='2'?' (2분 경과)':''}`, 'alarm', 8000); beep(); speak(`${bedLabel(r)} 베드, 치료 종료 시간입니다.`);
       }
     }
   }
@@ -705,7 +761,7 @@ function render(){
   tick();
 }
 function statusTag(r){
-  const map={running:['run','치료 중'],ended:['wait','작성 대기'],done:['done','작성 완료'],cancelled:['cancel','취소'],waiting:['','대기']};
+  const map={running:['run','치료 중'],ended:['wait','작성 대기'],done:['done','작성 완료'],cancelled:['cancel','취소'],waiting:['','대기'],hold:['hold','준비 중']};
   const [c,t]=map[r.status]||['',r.status];
   return `<span class="tag ${c}">${t}</span>${r.status==='done'&&r.incomplete?.length?` <span class="tag cancel" title="${esc(r.incomplete.join(' / '))}">미비 ${r.incomplete.length}</span>`:''}${r.status==='done'&&r.emrDone?' <span class="tag emrok">EMR✓</span>':''}`;
 }
@@ -716,27 +772,36 @@ const STRIP_BEDS = 10;
 const bedLabel = r => r.room==='ex' ? `특수 ${r.bed}번` : `${r.bed}번`;
 const bedNums = room => Array.from({length:room.beds}, (_,i)=>(room.first||1)+i);
 function bedTile(room, b){
+  const no = room.id==='ex'?'특'+b:b;
+  const h=S.records.find(x=>x.status==='hold' && x.date===S.date && x.room===room.id && +x.bed===b);
+  if(h) return `<div class="tile hold" data-room="${room.id}" data-bed="${b}">
+      <button class="tile-body" data-act="startHold" data-id="${h.id}" title="준비 끝 — 치료 시작"><span class="row"><span class="no">${no}</span><span class="grow"></span><span class="tag hold">준비 중</span></span>
+        <span class="pt">${esc(h.name||'(이름 없음)')} ${insTag(h)}</span><span class="mods">${esc(h.holdBy||'')} · ${hm(h.createdAt)}부터</span></button>
+      <div class="row" style="gap:4px;margin:0 5px"><button class="btn sm pri grow" data-act="startHold" data-id="${h.id}">시작</button><button class="btn sm" data-act="unhold" data-id="${h.id}">해제</button></div></div>`;
   const r=S.records.find(x=>x.status==='running' && x.date===S.date && x.room===room.id && +x.bed===b);
-  if(!r) return `<button class="tile empty ${S.pickWaiting?'pick':''}" data-act="start" data-room="${room.id}" data-bed="${b}" title="${b}번 베드 치료 시작"><span class="no">${room.id==='ex'?'특'+b:b}</span><span class="plus">＋</span><span class="hint">${S.pickWaiting?'여기에 배정':'치료 시작'}</span></button>`;
+  if(!r) return `<div class="tile empty ${S.pickWaiting?'pick':''}" data-room="${room.id}" data-bed="${b}">
+      <button class="tile-main" data-act="start" data-room="${room.id}" data-bed="${b}" title="${b}번 베드 치료 시작"><span class="no">${no}</span><span class="plus">＋</span><span class="hint">${S.pickWaiting?'여기에 배정':'치료 시작'}</span></button>
+      <button class="pin" data-act="hold" data-room="${room.id}" data-bed="${b}" title="슬립 쓰는 동안 베드 잡아두기">찜</button></div>`;
   const p=curPhase(r), ph=phasesOf(r), last=p===ph[ph.length-1];
   const nm=id=>MOD(id)?.en||MOD(id)?.name||id;
   const cur=r.items.filter(i=>i.phase===p).map(i=>nm(i.mid)).join('+');
-  const nxt=ph.length>1&&!last ? ` → ${r.items.filter(i=>i.phase===ph[ph.indexOf(p)+1]).map(i=>nm(i.mid)).join('+')}` : '';
-  return `<div class="tile run" data-rid="${r.id}">
+  const nxt=!last ? ` → ${ph.slice(ph.indexOf(p)+1).map(q=>r.items.filter(i=>i.phase===q).map(i=>nm(i.mid)).join('+')).join(' → ')}` : '';
+  return `<div class="tile run" data-rid="${r.id}" data-room="${room.id}" data-bed="${b}" data-phase="${p}">
     <button class="tile-body" data-act="bedMenu" data-id="${r.id}" title="베드 메뉴">
-      <span class="row"><span class="no">${room.id==='ex'?'특'+b:b}</span><span class="grow"></span>${ph.length>1?`<span class="tag">${ph.indexOf(p)+1}/${ph.length}단계</span>`:''}</span>
+      <span class="row"><span class="no">${room.id==='ex'?'특'+b:b}</span><span class="grow"></span>${insTag(r)}</span>
       <span class="pt">${esc(r.name)}${r.items.some(i=>MOD(i.mid)?.coverage==='비급여')?' <span class="tag wait">비급여</span>':''}</span>
       <span class="mods">${esc(cur)}${esc(nxt)}</span>
       <span class="timer" data-timer="${r.id}">--:--</span>
       <span class="bar"><b data-bar="${r.id}" style="width:0"></b></span>
     </button>
-    <button class="btn sm ${last?'ok':'pri'} tile-go" data-act="advance" data-id="${r.id}">${last?'종료':'다음 ▶'}</button>
+    <button class="btn sm ok tile-go" data-act="advance" data-id="${r.id}">종료</button>
   </div>`;
 }
 function renderBoard(){
   const [pt, ex] = [S.settings.rooms.find(r=>r.id==='pt'), S.settings.rooms.find(r=>r.id==='ex')];
   const waiting=S.records.filter(r=>r.status==='waiting').sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   const pend=S.records.filter(r=>r.status==='ended').sort((a,b)=>(a.endAt||'').localeCompare(b.endAt||''));
+  const noEmr=S.records.filter(r=>r.status==='done' && !r.emrDone && r.date===S.date).sort((a,b)=>(a.endAt||'').localeCompare(b.endAt||''));
   const stale=S.records.filter(r=>r.status==='running' && r.date!==S.date);
   const busy = room => S.records.filter(x=>x.status==='running'&&x.date===S.date&&x.room===room.id).length;
   const ptNums=bedNums(pt), strip=ptNums.slice(0,STRIP_BEDS), box=ptNums.slice(STRIP_BEDS), pairs=[];
@@ -755,7 +820,7 @@ function renderBoard(){
     <div class="floor-bottom">
       <div class="zone station">스테이션</div>
       <div class="zone door"><span>출입구</span></div>
-      <div class="zone exroom">${box.length?`<div class="pair" style="--n:${Math.min(box.length,2)}">${box.map(b=>bedTile(pt,b)).join('')}</div>`:''}</div>
+      <div class="zone exroom">${box.length?`<div class="pair" style="--n:${Math.min(box.length,2)}">${box.slice().reverse().map(b=>bedTile(pt,b)).join('')}</div>`:''}</div>
       <div class="zone lounge">휴게실</div>
     </div>
   </div>
@@ -765,28 +830,55 @@ function renderBoard(){
   </div>
   <div class="lists">
     <div class="panel">
-      <div class="row"><h2 class="grow" style="margin:0">작성 대기 <span class="muted">${pend.length}</span></h2></div>
-      <p class="small muted" style="margin:4px 0 8px">치료가 끝나 경과 기록이 필요한 건</p>
-      <div class="list">${pend.map(r=>`<div class="item"><div class="grow"><b>${esc(r.regNo)} ${esc(r.name)}</b> <span class="small muted">${r.bed?bedLabel(r):''}</span><div class="small muted">${r.date!==S.date?`<b style="color:var(--bad)">${r.date.slice(5)}</b> `:''}${hm(r.startAt)}~${hm(r.endAt)} · ${esc(modNames(r))}</div></div><button class="btn sm pri" data-act="edit" data-id="${r.id}" data-date="${r.date}">작성</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
-    </div>
-    <div class="panel">
       <div class="row"><h2 class="grow" style="margin:0">대기 환자 <span class="muted">${waiting.length}</span></h2><button class="btn sm" data-act="paste">접수명단 붙여넣기</button></div>
       <p class="small muted" style="margin:4px 0 8px">환자를 누른 뒤 배치도에서 빈 베드를 누르면 배정됩니다</p>
-      <div class="list">${waiting.map(r=>`<div class="item ${S.pickWaiting===r.id?'sel':''}"><button class="grow" style="all:unset;cursor:pointer;flex:1" data-act="pick" data-id="${r.id}"><b>${esc(r.regNo)} ${esc(r.name)}</b><div class="small muted">${hm(r.createdAt)} 접수${r.memo?' · '+esc(r.memo):''}</div></button><button class="btn sm bad" data-act="unwait" data-id="${r.id}">✕</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
+      <div class="list">${waiting.map(r=>`<div class="item ${S.pickWaiting===r.id?'sel':''}"><button class="grow" style="all:unset;cursor:pointer;flex:1;min-width:0" data-act="pick" data-id="${r.id}"><b>${esc(r.regNo)} ${esc(r.name)}</b> ${insTag(r)}<div class="small muted">${hm(r.createdAt)} 접수 · ${siteText(r)?`<span style="color:var(--text)">${esc(siteText(r))}</span>`:'<span style="color:var(--warn)">부위 미정</span>'}</div></button><button class="btn sm" data-act="waitSite" data-id="${r.id}">부위</button><button class="btn sm bad" data-act="unwait" data-id="${r.id}">✕</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2 class="grow" style="margin:0">작성 대기 <span class="muted">${pend.length}</span></h2></div>
+      <p class="small muted" style="margin:4px 0 8px">치료가 끝나 경과 기록이 필요한 건</p>
+      <div class="list">${pend.map(r=>`<div class="item"><div class="grow"><b>${esc(r.regNo)} ${esc(r.name)}</b> ${insTag(r)} <span class="small muted">${r.bed?bedLabel(r):''}</span><div class="small muted">${r.date!==S.date?`<b style="color:var(--bad)">${r.date.slice(5)}</b> `:''}${hm(r.startAt)}~${hm(r.endAt)} · ${esc(modNames(r))}</div></div><button class="btn sm pri" data-act="edit" data-id="${r.id}" data-date="${r.date}">작성</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
+    </div>
+    <div class="panel">
+      <div class="row"><h2 class="grow" style="margin:0">EMR 미입력 <span class="muted">${noEmr.length}</span></h2></div>
+      <p class="small muted" style="margin:4px 0 8px">작성 완료했지만 EMR 입력 체크가 안 된 건</p>
+      <div class="list">${noEmr.map(r=>`<div class="item"><div class="grow"><b>${esc(r.regNo)} ${esc(r.name)}</b> ${insTag(r)}${r.incomplete?.length?' <span class="tag cancel">미비</span>':''}<div class="small muted">${hm(r.startAt)}~${hm(r.endAt)} · ${esc(modNames(r))}</div></div><button class="btn sm" data-act="copyRec" data-id="${r.id}">복사</button><button class="btn sm ok" data-act="emrToggle" data-id="${r.id}">EMR ✓</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
     </div>
   </div>`;
 }
 function openBedMenu(r){
-  const p=curPhase(r), ph=phasesOf(r), last=p===ph[ph.length-1];
-  openDlg(`<div class="dlg-h"><h2>${esc(roomName(r.room))} ${bedLabel(r)} 베드 — ${esc(r.regNo)} ${esc(r.name)}</h2><span class="tag">${esc(r.visit||'외래')}</span><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
+  schedule(r); const p=curPhase(r);
+  openDlg(`<div class="dlg-h"><h2>${esc(roomName(r.room))} ${bedLabel(r)} 베드 — ${esc(r.regNo)} ${esc(r.name)}</h2><span class="tag">${esc(r.visit||'외래')}</span>${insTag(r)}<span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
   <div class="dlg-b">
-    <div class="kv"><span class="muted">시작</span><span>${hm(r.startAt)} · 시행자 ${esc(r.therapist||'-')}</span>
-    ${r.items.map(i=>`<span class="muted">${ph.length>1?ph.indexOf(i.phase)+1+'단계':''}</span><span>${esc(MOD(i.mid)?.name||i.mid)} ${i.min}분 · ${i.start?hm(i.start)+'~'+(i.end?hm(i.end):''):'대기'}${i.phase===p&&!i.end?' <span class="tag run">진행 중</span>':''}</span>`).join('')}</div>
+    <div class="kv"><span class="muted">시작</span><span>${hm(r.startAt)} · 시행자 ${esc(r.therapist||'-')} · 부위 ${esc(siteText(r)||'-')}</span>
+    ${r.items.slice().sort((x,y)=>x.phase-y.phase).map(i=>`<span class="muted">${esc(MOD(i.mid)?.en||'')}</span><span>${esc(MOD(i.mid)?.name||i.mid)} ${i.min}분 · ${hm(i.start)}~${hm(new Date(tms(i.start)+i.min*60000).toISOString())}${i.phase===p?' <span class="tag run">진행 중</span>':tms(i.start)>Date.now()?' <span class="tag">예정</span>':''}</span>`).join('')}</div>
+    <div><div class="small muted" style="margin-bottom:4px">베드 이동 (잘못 배정했을 때) — 옮길 빈 베드 선택</div>
+      <div class="chips">${freeBeds(r.room).map(b=>`<button type="button" class="chip" data-act="moveBed" data-id="${r.id}" data-bed="${b}">${r.room==='ex'?'특'+b:b+'번'}</button>`).join('')||'<span class="small muted">빈 베드 없음</span>'}</div></div>
   </div>
   <div class="dlg-f"><button class="btn bad" data-act="cancelRun" data-id="${r.id}">치료 취소</button><span class="grow"></span>
     <button class="btn" data-act="edit" data-id="${r.id}">기록 보기·수정</button>
     <button class="btn" data-act="extend" data-id="${r.id}">+5분 연장</button>
-    <button class="btn ${last?'ok':'pri'}" data-act="advance" data-id="${r.id}">${last?'치료 종료':'다음 단계 시작'}</button></div>`);
+    <button class="btn ok" data-act="advance" data-id="${r.id}">치료 종료</button></div>`);
+}
+/** 같은 치료실의 빈 베드(치료 중·준비 중 아닌) */
+function freeBeds(roomId){
+  const room=S.settings.rooms.find(x=>x.id===roomId); if(!room) return [];
+  const used=new Set(S.records.filter(x=>['running','hold'].includes(x.status) && x.date===S.date && x.room===roomId).map(x=>+x.bed));
+  return bedNums(room).filter(b=>!used.has(b));
+}
+/** 대기 환자 부위·보험 1차 설정 */
+function openWaitSite(r){
+  openDlg(`<div class="dlg-h"><h2>${esc(r.regNo)} ${esc(r.name)} — 부위·보험</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
+  <div class="dlg-b">
+    <label class="f"><span>보험 구분</span><select id="wIns" style="width:auto">${INS.map(o=>`<option ${o===(r.ins||'건강보험')?'selected':''}>${o}</option>`).join('')}</select></label>
+    <div><div class="small muted" style="font-weight:600">치료 부위 <span id="wTaHint" ${r.ins==='자보'?'':'hidden'} style="color:#b42318">· 자보: 두 부위 선택</span></div>
+      <div class="row" style="margin:4px 0"><div class="seg" id="wSide">${['Rt.','Lt.','Both',''].map(o=>`<button type="button" data-side="${o}" class="${(r.side||'')===o?'on':''}">${o||'좌우 없음'}</button>`).join('')}</div>
+      <input type="text" id="wSiteEtc" value="${esc(r.siteEtc||'')}" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
+      ${chipGroup('wSites', [...new Set([...S.settings.sites, ...(r.sites||[])])], r.sites)}</div>
+    <input type="text" id="wMemo" value="${esc(r.memo||'')}" placeholder="메모 (선택)">
+  </div>
+  <div class="dlg-f"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="saveWaitSite" data-id="${r.id}">저장</button></div>`);
+  $('#wIns').addEventListener('change', e=>{ $('#wTaHint').hidden = e.target.value!=='자보'; });
 }
 function tick(){
   const now=Date.now(); $('#clock').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -795,6 +887,8 @@ function tick(){
     const el=document.querySelector(`[data-timer="${r.id}"]`); if(!el) continue;
     const rem=recRemain(r,now); const card=el.closest('.tile');
     el.textContent = rem==null?'--:--':(rem>=0?fmtClock(rem):'초과 '+fmtClock(rem));
+    // 순서가 바뀌면(레이저 시작 등) 카드의 '지금 치료' 표시 갱신
+    if(card.dataset.phase!==String(curPhase(r,now))){ render(); return; }
     card.classList.toggle('soon', rem!=null && rem>0 && rem<=60000);
     card.classList.toggle('over', rem!=null && rem<=0);
     const bar=document.querySelector(`[data-bar="${r.id}"]`); if(bar) bar.style.width=(recProgress(r,now)*100).toFixed(1)+'%';
@@ -804,8 +898,13 @@ function tick(){
 
 /* ---------- 치료 대장 ---------- */
 function renderLedger(){
-  const rows = (S.ledgerDate===S.date ? S.records.filter(r=>r.date===S.date) : (S.ledgerRows||[])).filter(r=>r.status!=='waiting')
+  const all = (S.ledgerDate===S.date ? S.records.filter(r=>r.date===S.date) : (S.ledgerRows||[])).filter(r=>!['waiting','hold'].includes(r.status))
     .sort((a,b)=>(a.startAt||'').localeCompare(b.startAt||''));
+  const F = {all:['전체',()=>true], running:['치료 중',r=>r.status==='running'], ended:['작성 대기',r=>r.status==='ended'],
+    noemr:['EMR 미입력',r=>r.status==='done'&&!r.emrDone], emr:['EMR 완료',r=>r.status==='done'&&r.emrDone],
+    inc:['미비',r=>r.status==='done'&&r.incomplete?.length], ta:['자보',r=>r.ins==='자보'], cancelled:['취소',r=>r.status==='cancelled']};
+  const fk = F[S.ledgerFilter] ? S.ledgerFilter : 'all';
+  const rows = all.filter(F[fk][1]);
   const cnt = k => rows.filter(r=>r.status===k).length;
   return `
   <div class="row no-print">
@@ -819,7 +918,8 @@ function renderLedger(){
     <button class="btn" data-act="csvOpen">엑셀(CSV) 내보내기</button>
     <button class="btn" data-act="print">인쇄</button>
   </div>
-  <p class="muted small">${dateLabel(S.ledgerDate)} · 전체 ${rows.length}건 · 치료 중 ${cnt('running')} · 작성 대기 ${cnt('ended')} · 작성 완료 ${cnt('done')} (EMR 입력 ${rows.filter(r=>r.emrDone).length}) · 취소 ${cnt('cancelled')}</p>
+  <div class="chips no-print" style="margin:8px 0">${Object.entries(F).map(([k,[lb,fn]])=>`<button type="button" class="chip ${k===fk?'on':''}" data-act="ldFilter" data-f="${k}">${lb} ${all.filter(fn).length}</button>`).join('')}</div>
+  <p class="muted small">${dateLabel(S.ledgerDate)} · 전체 ${all.length}건 · 치료 중 ${cnt('running')} · 작성 대기 ${cnt('ended')} · 작성 완료 ${cnt('done')} (EMR 입력 ${rows.filter(r=>r.emrDone).length}) · 취소 ${cnt('cancelled')}</p>
   ${S.ledgerDate!==S.date && S.ledgerRows==null ? '<div class="empty-note">불러오는 중…</div>' : rows.length? `
   <div class="tablewrap"><table class="t">
     <thead><tr><th class="no-print"><input type="checkbox" id="selAll"></th><th>시간</th><th>치료실/베드</th><th>등록번호</th><th>이름</th><th>치료 항목</th><th>처방의</th><th>시행자</th><th>상태</th><th class="no-print"></th></tr></thead>
@@ -827,7 +927,7 @@ function renderLedger(){
       <td class="no-print"><input type="checkbox" class="sel" value="${r.id}"></td>
       <td>${hm(r.startAt)}~${r.endAt?hm(r.endAt):''}</td><td>${esc(roomName(r.room))} ${r.bed?r.bed+'번':''}</td>
       <td>${esc(r.regNo)}</td><td>${esc(r.name)}</td><td>${esc(r.items.map(i=>`${MOD(i.mid)?.en||i.mid} ${i.start&&i.end?mins(i.start,i.end):i.min}′`).join(', '))}${r.items.some(i=>MOD(i.mid)?.coverage==='비급여')?' <span class="tag wait">비급여</span>':''}</td>
-      <td>${esc(r.doctor||'')}</td><td>${esc(r.therapist||'')}</td><td>${statusTag(r)}${r.cancelReason?`<div class="small muted">${esc(r.cancelReason)}</div>`:''}</td>
+      <td>${esc(r.doctor||'')}</td><td>${esc(r.therapist||'')}</td><td>${statusTag(r)} ${insTag(r)}${r.status==='done'?` <button class="btn sm no-print" data-act="emrToggle" data-id="${r.id}" style="padding:1px 7px">${r.emrDone?'EMR 취소':'EMR ✓'}</button>`:''}${r.cancelReason?`<div class="small muted">${esc(r.cancelReason)}</div>`:''}</td>
       <td class="no-print"><button class="btn sm" data-act="edit" data-id="${r.id}" data-date="${r.date}">열기</button></td></tr>`).join('')}</tbody>
   </table></div>` : '<div class="empty-note">기록이 없습니다.</div>'}`;
 }
@@ -848,7 +948,7 @@ function renderPatient(){
       <span class="muted">최근 처방</span><span>${v.patient?.plan? esc(`${v.patient.plan.date} · ${v.patient.plan.items.map(i=>MOD(i.mid)?.en||i.mid).join(' + ')} · ${[v.patient.plan.side,(v.patient.plan.sites||[]).join(', ')].filter(Boolean).join(' ')}`):'-'}</span>
       <span class="muted">메모</span><span class="row"><input type="text" id="pMemo" value="${esc(v.patient?.memo||'')}" placeholder="예: 핫팩 열 민감, 수건 추가" class="grow no-print" style="max-width:420px"><button class="btn sm no-print" data-act="pMemoSave">저장</button><span class="print-only" hidden>${esc(v.patient?.memo||'')}</span></span></div>
   </div>
-  ${v.records.filter(r=>r.status!=='waiting').map(r=>`<div class="hist"><div class="hh"><b>${dateLabel(r.date)}</b><span>${hm(r.startAt)}~${hm(r.endAt)}</span>${statusTag(r)}<span class="grow"></span>
+  ${v.records.filter(r=>!['waiting','hold'].includes(r.status)).map(r=>`<div class="hist"><div class="hh"><b>${dateLabel(r.date)}</b><span>${hm(r.startAt)}~${hm(r.endAt)}</span>${statusTag(r)}<span class="grow"></span>
      <button class="btn sm no-print" data-act="copyOne" data-id="${r.id}" data-date="${r.date}">복사</button><button class="btn sm no-print" data-act="edit" data-id="${r.id}" data-date="${r.date}">열기</button></div>
      <pre>${esc(emrOf(r))}</pre></div>`).join('')||'<div class="empty-note">기록 없음</div>'}`}`;
 }
@@ -861,7 +961,7 @@ function renderGuide(){
     <p class="small muted">근거: 건강보험 행위 급여목록 제7장 이학요법료 및 심사기준(심평원), 첨부 「물리치료 기록 작성 샘플」. 강도·조건은 <b>기본 권고값으로 고정 기록</b>됩니다(괄호 안 값). 병원 장비 설정이 다르면 기본값 변경을 요청하세요. 수가·기준은 개정될 수 있으므로 심평원 최신 고시로 주기적으로 확인하세요.</p>
     <div class="tablewrap"><table class="t">
       <thead><tr><th>항목</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간</th><th>기록하는 강도·조건</th><th>산정·기록 기준</th></tr></thead>
-      <tbody>${mods().map(m=>`<tr style="${m.enabled?'':'opacity:.55'}"><td><b>${esc(m.name)}</b><div class="small muted">${esc(m.en)}${m.enabled?'':' · 사용 안 함'}</div></td><td style="white-space:nowrap">${esc(m.code)}</td><td style="white-space:nowrap">${esc(m.coverage)}</td><td style="white-space:nowrap">${esc(roomName(m.room))}</td><td style="white-space:nowrap">${m.min}분</td>
+      <tbody>${mods().map(m=>`<tr style="${m.enabled?'':'opacity:.55'}"><td><b>${esc(m.name)}</b><div class="small muted">${esc(m.en)}${m.enabled?'':' · 사용 안 함'}</div></td><td style="white-space:nowrap">${esc(m.code)}</td><td style="white-space:nowrap">${esc(m.coverage)}</td><td style="white-space:nowrap">${esc([m.room,...(m.alsoRooms||[])].map(roomName).join('·'))}</td><td style="white-space:nowrap">${m.min}분</td>
         <td class="small">${(m.fields||[]).map(f=>esc(f.label)+(f.req?' <b style="color:var(--bad)">*</b>':'')+(f.def?` <span class="muted">(${esc(f.def)})</span>`:'')+(f.hint?` <span class="muted">— ${esc(f.hint)}</span>`:'')).join('<br>')}</td>
         <td class="small">${esc(m.basis)}</td></tr>`).join('')}</tbody></table></div>
   </div>
@@ -907,8 +1007,8 @@ function renderSettings(){
   </div>
   <div class="panel" style="margin-top:12px">
     <h2>치료 항목</h2>
-    <p class="small muted">병원 수가표에 맞춰 코드·급여구분·기본시간을 조정하세요. '단계'가 같은 항목은 동시에, 다음 단계는 앞 단계가 끝난 뒤 진행됩니다.</p>
-    <div class="tablewrap"><table class="t"><thead><tr><th>사용</th><th>이름</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간(분)</th><th>기본 단계</th></tr></thead><tbody>
+    <p class="small muted">병원 수가표에 맞춰 코드·급여구분·기본시간을 조정하세요. '순서' 숫자가 같은 항목은 동시에, 큰 항목은 앞 치료가 끝나면 자동으로 이어서 진행됩니다(예: IR·ICT 1 → 레이저 2).</p>
+    <div class="tablewrap"><table class="t"><thead><tr><th>사용</th><th>이름</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간(분)</th><th>순서 <span class='muted'>(같으면 동시·크면 이어서)</span></th></tr></thead><tbody>
     ${mods().map(m=>`<tr data-mod="${m.id}"><td><input type="checkbox" data-k="enabled" ${m.enabled?'checked':''}></td>
       <td><input type="text" data-k="name" value="${esc(m.name)}"></td><td><input type="text" data-k="code" value="${esc(m.code)}" style="width:90px"></td>
       <td><select data-k="coverage">${['급여','비급여'].map(o=>`<option ${o===m.coverage?'selected':''}>${o}</option>`).join('')}</select></td>
@@ -971,7 +1071,7 @@ const readChips = el => el ? $$('.chip.on', el).map(b=>b.textContent) : [];
 const nrsSel = (id, v) => `<select id="${id}" style="width:auto"><option value="">NRS -</option>${[...Array(11).keys()].map(n=>`<option value="${n}" ${String(v)===String(n)?'selected':''}>NRS ${n}</option>`).join('')}</select>`;
 
 async function openStart(bed, waitingRec){
-  const room=S.room; const avail=mods().filter(m=>m.enabled && m.room===room);
+  const room=S.room; const avail=mods().filter(m=>m.enabled && inRoom(m, room));
   const w = waitingRec || {};
   const d=openDlg(`
   <div class="dlg-h"><h2>${esc(roomName(room))} ${bed}번 베드 — 치료 시작</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
@@ -979,21 +1079,21 @@ async function openStart(bed, waitingRec){
     <div class="grid2">
       <label class="f req"><span>등록번호</span><div class="ac"><input type="text" id="sRegNo" value="${esc(w.regNo||'')}" autocomplete="off" inputmode="numeric"><div class="ac-list" id="sAc" hidden></div></div></label>
       <label class="f req"><span>이름</span><input type="text" id="sName" value="${esc(w.name||'')}"></label>
-      <label class="f"><span>구분</span><select id="sVisit"><option>외래</option><option>입원</option></select></label>
+      <label class="f"><span>구분</span><div class="row" style="flex-wrap:nowrap"><select id="sVisit"><option>외래</option><option>입원</option></select><select id="sIns" title="보험 구분">${INS.map(o=>`<option ${o===(w.ins||'건강보험')?'selected':''}>${o}</option>`).join('')}</select></div></label>
       <label class="f"><span>시작 시각</span><input type="time" id="sStart" value="${hm(nowIso())}"></label>
     </div>
-    <div id="sPlanNote" class="small muted"></div>
-    <div><div class="small muted" style="margin-bottom:4px">빠른 선택</div><div class="chips">${(PRESETS[room]||[]).map((p,i)=>p.items.every(id=>MOD(id)?.enabled&&MOD(id)?.room===room)?`<button type="button" class="chip" data-act="preset" data-i="${i}">${esc(p.name)}</button>`:'').join('')}
+    <div id="sPlanNote" class="small muted" style="min-height:1.5em"></div>
+    <div><div class="small muted" style="margin-bottom:4px">빠른 선택</div><div class="chips">${(PRESETS[room]||[]).map((p,i)=>p.items.every(id=>MOD(id)?.enabled&&inRoom(MOD(id),room))?`<button type="button" class="chip" data-act="preset" data-i="${i}">${esc(p.name)}</button>`:'').join('')}
       <span class="small muted" style="align-self:center;margin-left:6px">전체 시간:</span>${[10,15,20].map(n=>`<button type="button" class="chip" data-act="allMin" data-n="${n}">${n}분</button>`).join('')}</div></div>
     <div class="list" id="sMods">${avail.map(m=>`<div class="mod" data-mod="${m.id}"><div class="mod-h">
       <label class="row nm"><input type="checkbox" data-on> ${esc(m.name)} <span class="muted small">${esc(m.en)} · ${esc(m.code)}${m.coverage==='비급여'?' · 비급여':''}</span></label><span class="grow"></span>
       <span class="mins"><button type="button" class="btn sm" data-act="minus">−</button><input type="text" inputmode="numeric" data-min value="${m.min}"><span class="small">분</span><button type="button" class="btn sm" data-act="plus">＋</button></span>
-      <select data-phase style="width:auto" title="같은 단계끼리 동시 진행">${[1,2,3].map(n=>`<option value="${n}" ${n===m.phase?'selected':''}>${n}단계</option>`).join('')}</select>
+      ${m.orderChoice?`<select data-order style="width:auto" title="다른 치료와의 순서"><option value="after">끝나고 이어서</option><option value="before">먼저(선행)</option></select>`:m.phase>1?`<span class="small muted" style="min-width:92px">앞 치료 후 이어서</span>`:`<span style="min-width:92px"></span>`}
     </div></div>`).join('')}</div>
     <div class="grid2">
       <label class="f"><span>처방의</span><select id="sDoctor">${selectOpts(S.settings.doctors, S.local.lastDoctor)}</select></label>
       <label class="f"><span>시행자</span><select id="sTher">${selectOpts(S.settings.therapists, S.local.lastTherapist)}</select></label>
-      <div style="grid-column:1/-1"><div class="f req" style="font-size:13px;color:var(--muted);font-weight:600"><span>치료 부위</span></div>
+      <div style="grid-column:1/-1"><div class="f req" style="font-size:13px;color:var(--muted);font-weight:600"><span>치료 부위 <b id="sTaHint" style="color:#b42318" ${w.ins==='자보'?'':'hidden'}>· 자보: 두 부위 선택</b></span></div>
         <div class="row" style="margin:4px 0"><div class="seg" id="sSide">${['Rt.','Lt.','Both',''].map(o=>`<button type="button" data-side="${o}" class="${o===''?'on':''}">${o||'좌우 없음'}</button>`).join('')}</div>
         <input type="text" id="sSiteEtc" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
         ${chipGroup('sSites', S.settings.sites, [])}</div>
@@ -1003,14 +1103,15 @@ async function openStart(bed, waitingRec){
     <div id="sWarn"></div>
   </div>
   <div class="dlg-f"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="doStart" data-bed="${bed}" data-wid="${esc(w.id||'')}">▶ 치료 시작</button></div>`);
-  const applyItems = (ids, from, seq) => {
+  const applyItems = (ids, from, order) => {
     $$('#sMods .mod').forEach(el=>{ const on=ids.includes(el.dataset.mod); el.classList.toggle('on',on); $('[data-on]',el).checked=on;
-      if(on) $('[data-phase]',el).value = seq ? ids.indexOf(el.dataset.mod)+1 : MOD(el.dataset.mod).phase;
-      const pi=from&&from.find(i=>i.mid===el.dataset.mod); if(pi){ $('[data-min]',el).value=pi.min; $('[data-phase]',el).value=pi.phase; } });
+      const sel=$('[data-order]',el), pi=from&&from.find(i=>i.mid===el.dataset.mod);
+      if(sel) sel.value = (order&&order[el.dataset.mod]) || (pi ? (pi.phase<1?'before':'after') : 'after');
+      if(pi) $('[data-min]',el).value=pi.min; });
   };
   applyItems((PRESETS[room]||[])[0]?.items||[]);
   d._params={}; d._touched=false;
-  d._applyPreset=i=>{ d._touched=true; applyItems(PRESETS[room][i].items, null, PRESETS[room][i].seq); };
+  d._applyPreset=i=>{ d._touched=true; applyItems(PRESETS[room][i].items, null, PRESETS[room][i].order); };
   $('#sMods').addEventListener('input', ()=>{ d._touched=true; });
   // 따로 기록하는 항목(충격파)은 다른 항목과 함께 선택할 수 없음
   $('#sMods').addEventListener('change', ev=>{
@@ -1033,6 +1134,7 @@ async function openStart(bed, waitingRec){
       if(!d._touched) applyItems(ids, p.plan.items);
       d._params=Object.fromEntries(p.plan.items.map(i=>[i.mid,i.params]));
       d._plan=p.plan; $('#sVisit').value=p.plan.visit||'외래';
+      if(!d._insSet && p.plan.ins){ $('#sIns').value=p.plan.ins; $('#sTaHint').hidden = p.plan.ins!=='자보'; }
       if(!readChips($('#sSites')).length && !$('#sSiteEtc').value){
         const known=new Set(S.settings.sites);
         $$('#sSites .chip').forEach(c=>c.classList.toggle('on', (p.plan.sites||[]).includes(c.textContent)));
@@ -1043,6 +1145,15 @@ async function openStart(bed, waitingRec){
       $('#sPlanNote').innerHTML=`✓ 지난 처방 불러옴 (${esc(p.plan.date)}: ${esc(p.plan.items.map(i=>MOD(i.mid)?.en).join(' + '))}${p.plan.sites?.length?' · '+esc([p.plan.side,p.plan.sites.join(', ')].filter(Boolean).join(' ')):''})${p.memo?` · <b>메모: ${esc(p.memo)}</b>`:''}`;
     } else $('#sPlanNote').innerHTML=p.memo?`<b>메모: ${esc(p.memo)}</b>`:'';
   };
+  // 접수 때 정한 부위·보험(1차) → 시작 창에 채움. 비어 있으면 지난 처방에서(2차)
+  if(w.ins){ d._insSet=true; }
+  $('#sIns').addEventListener('change', e=>{ d._insSet=true; $('#sTaHint').hidden = e.target.value!=='자보'; });
+  if((w.sites&&w.sites.length) || w.siteEtc){
+    $$('#sSites .chip').forEach(c=>c.classList.toggle('on', (w.sites||[]).includes(c.textContent)));
+    const known=new Set(S.settings.sites), extra=(w.sites||[]).filter(x=>!known.has(x));
+    $('#sSiteEtc').value=[...extra, w.siteEtc].filter(Boolean).join(', ');
+    $$('#sSide [data-side]').forEach(b=>b.classList.toggle('on', b.dataset.side===(w.side||'')));
+  }
   bindAutocomplete($('#sRegNo'), $('#sAc'), p=>{ $('#sRegNo').value=p.regNo; $('#sName').value=p.name||''; loadPlan(p.regNo); });
   $('#sRegNo').addEventListener('change', e=>loadPlan(e.target.value.trim()));
   if(w.regNo) loadPlan(w.regNo);
@@ -1087,20 +1198,23 @@ async function doStart(bed, wid){
     const params = isFixed(m) ? defs : Object.assign(defs, d._params[mid]||{});
     // 서술형(S·O·A·P, 평가)은 매번 새로 쓰도록 이전 값을 가져오지 않음
     for(const f of m.fields||[]) if(f.type==='textarea') delete params[f.k];
-    return {mid, min:Math.max(1,parseInt($('[data-min]',el).value)||m.min), phase:+$('[data-phase]',el).value, params, start:null, end:null};
+    // 순서: 기본은 항목별 고정(레이저는 IR·ICT 후), 단순운동 등은 '먼저/이어서' 선택
+    const ord=$('[data-order]',el)?.value; const phase = ord==='before' ? 0 : ord==='after' ? 3 : m.phase;
+    return {mid, min:Math.max(1,parseInt($('[data-min]',el).value)||m.min), phase, params, start:null, end:null};
   });
   const errs=[]; if(!regNo) errs.push('등록번호'); if(!name) errs.push('이름'); if(!items.length) errs.push('치료 항목');
   if(items.length>1 && items.some(i=>MOD(i.mid)?.solo)){ $('#sWarn').innerHTML='<div class="errbox">충격파(비급여)는 다른 치료와 따로 기록합니다. 충격파만 선택해 시작하세요.</div>'; return; }
   if(errs.length){ $('#sWarn').innerHTML=`<div class="errbox">${errs.join(', ')}을(를) 입력하세요.</div>`; return; }
-  if(S.records.some(r=>r.status==='running' && r.date===S.date && r.room===S.room && +r.bed===+bed)){ $('#sWarn').innerHTML='<div class="errbox">이미 사용 중인 베드입니다.</div>'; return; }
+  if(S.records.some(r=>['running','hold'].includes(r.status) && r.id!==wid && r.date===S.date && r.room===S.room && +r.bed===+bed)){ $('#sWarn').innerHTML='<div class="errbox">이미 사용 중이거나 다른 사람이 준비 중인 베드입니다.</div>'; return; }
   if(S.records.some(r=>r.status==='running' && r.regNo===regNo) && !confirm('이 환자는 다른 베드에서 치료 중입니다. 계속할까요?')) return;
   const t=setTime(nowIso(), $('#sStart').value||hm(nowIso()));
   const first=Math.min(...items.map(i=>i.phase)); items.forEach(i=>{ if(i.phase===first) i.start=t; });
+  schedule({items});   // 뒤 순서 시작 시각 미리 계산
   const plan=d._plan||{};
   const base = wid ? S.records.find(r=>r.id===wid) : null;
   const rec = {
-    ...(base?withBase(base):{id:uid(), createdAt:nowIso()}),
-    date:S.date, regNo, name, visit:$('#sVisit').value, room:S.room, bed:+bed,
+    ...(base?withBase(base):{id:uid(), createdAt:nowIso()}), fromWaiting:undefined, holdBy:undefined,
+    date:S.date, regNo, name, visit:$('#sVisit').value, ins:$('#sIns').value, room:S.room, bed:+bed,
     doctor:$('#sDoctor').value, therapist:$('#sTher').value,
     dx:plan.dx||'', sites:readChips($('#sSites')), side:$('#sSide .on')?.dataset.side||'', siteEtc:$('#sSiteEtc').value.trim(),
     items, startAt:t, endAt:null, status:'running',
@@ -1125,7 +1239,7 @@ async function openEdit(id, date){
     <div class="grid2">
       <label class="f req"><span>등록번호</span><input type="text" id="eRegNo" value="${esc(r.regNo)}"></label>
       <label class="f req"><span>이름</span><input type="text" id="eName" value="${esc(r.name)}"></label>
-      <label class="f"><span>구분</span><select id="eVisit">${['외래','입원'].map(o=>`<option ${o===r.visit?'selected':''}>${o}</option>`).join('')}</select></label>
+      <label class="f"><span>구분</span><div class="row" style="flex-wrap:nowrap"><select id="eVisit">${['외래','입원'].map(o=>`<option ${o===r.visit?'selected':''}>${o}</option>`).join('')}</select><select id="eIns">${INS.map(o=>`<option ${o===(r.ins||'건강보험')?'selected':''}>${o}</option>`).join('')}</select></div></label>
       <label class="f"><span>치료실·베드</span><input type="text" value="${esc(roomName(r.room))} ${r.bed||''}번 · ${dateLabel(r.date)}" disabled></label>
       <label class="f req"><span>처방의</span><select id="eDoctor">${selectOpts(S.settings.doctors, r.doctor)}</select></label>
       <label class="f req"><span>시행자</span><select id="eTher">${selectOpts(S.settings.therapists, r.therapist)}</select></label>
@@ -1173,7 +1287,7 @@ async function openEdit(id, date){
 }
 function collectEdit(){
   const d=$('#dlg'); const r=clone(d._rec);
-  r.regNo=$('#eRegNo').value.trim(); r.name=$('#eName').value.trim(); r.visit=$('#eVisit').value;
+  r.regNo=$('#eRegNo').value.trim(); r.name=$('#eName').value.trim(); r.visit=$('#eVisit').value; r.ins=$('#eIns').value;
   r.doctor=$('#eDoctor').value; r.therapist=$('#eTher').value; r.dx=$('#eDx').value.trim();
   r.side=$('#eSide .on')?.dataset.side||''; r.sites=readChips($('#eSites')); r.siteEtc=$('#eSiteEtc').value.trim();
   for(const it of r.items){
@@ -1183,6 +1297,7 @@ function collectEdit(){
     if(ts&&ts.value&&it.start) it.start=setTime(it.start, ts.value);
     if(te&&it.start){ it.end = te.value ? setTime(it.start, te.value) : (r.status==='running'?it.end:null); if(it.end && it.end<it.start) it.end=it.start; }
   }
+  if(r.status==='running'){ schedule(r); }
   if(r.status==='running' && r.date!==S.date && r.items.every(i=>i.end)) r.status='ended';
   if(r.status!=='running') finalizeTimes(r); else r.startAt=r.items.map(i=>i.start).filter(Boolean).sort()[0]||r.startAt;
   r.pre={phrases:readChips($('#ePre')), nrs:$('#ePreN').value, text:$('#ePreT').value.trim()};
@@ -1232,7 +1347,7 @@ function csvOf(rows){
   const H=['날짜','등록번호','이름','구분','치료실','베드','치료항목','코드','시작','종료','소요(분)','처방의','시행자','부위','상태','EMR입력','기록문'];
   const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
   const lines=[H.map(q).join(',')];
-  for(const r of rows.filter(r=>r.status!=='waiting')) lines.push([r.date,r.regNo,r.name,r.visit,roomName(r.room),r.bed,modNames(r),r.items.map(i=>MOD(i.mid)?.code).join('+'),hm(r.startAt),r.endAt?hm(r.endAt):'',r.startAt&&r.endAt?mins(r.startAt,r.endAt):'',r.doctor,r.therapist,siteText(r),({running:'치료중',ended:'작성대기',done:'작성완료',cancelled:'취소'})[r.status]||r.status,r.emrDone?'Y':'',emrOf(r)].map(q).join(','));
+  for(const r of rows.filter(r=>!['waiting','hold'].includes(r.status))) lines.push([r.date,r.regNo,r.name,r.visit,roomName(r.room),r.bed,modNames(r),r.items.map(i=>MOD(i.mid)?.code).join('+'),hm(r.startAt),r.endAt?hm(r.endAt):'',r.startAt&&r.endAt?mins(r.startAt,r.endAt):'',r.doctor,r.therapist,siteText(r),({running:'치료중',ended:'작성대기',done:'작성완료',cancelled:'취소'})[r.status]||r.status,r.emrDone?'Y':'',emrOf(r)].map(q).join(','));
   return '﻿'+lines.join('\r\n');
 }
 function download(name, text, type='text/csv;charset=utf-8'){
@@ -1254,13 +1369,41 @@ document.addEventListener('click', async ev=>{
   const t=ev.target.closest('[data-tab]'); if(t){ S.tab=t.dataset.tab; if(S.tab==='ledger'&&S.ledgerDate!==S.date) loadLedger(); render(); return; }
   const a=ev.target.closest('[data-act]'); if(!a) return;
   const act=a.dataset.act, id=a.dataset.id;
-  const rec = id && S.records.find(r=>r.id===id);
+  const rec = id && (S.records.find(r=>r.id===id) || (S.ledgerRows||[]).find(r=>r.id===id));
   switch(act){
     case 'close': closeDlg(); break;
     case 'room': S.room=a.dataset.room; S.local.room=S.room; saveLocal(); render(); break;
     case 'bedMenu': if(rec) openBedMenu(rec); break;
+    case 'moveBed': {
+      const nb=+a.dataset.bed; if(!freeBeds(rec.room).includes(nb)){ toast('이미 사용 중인 베드입니다.'); break; }
+      const r=withBase(rec); const from=bedLabel(r); r.bed=nb; closeDlg(); await saveRecord(r); toast(`${from} → ${bedLabel(r)} 베드로 옮겼습니다.`); break; }
+    case 'hold': {
+      const bed=+a.dataset.bed, roomId=a.dataset.room; if(!freeBeds(roomId).includes(bed)){ toast('이미 사용 중인 베드입니다.'); break; }
+      const w=S.pickWaiting && S.records.find(r=>r.id===S.pickWaiting);
+      let rec2;
+      if(w){ rec2={...withBase(w), status:'hold', room:roomId, bed, fromWaiting:true, holdBy:S.local.device||'', createdAt:w.createdAt}; S.pickWaiting=null; }
+      else {
+        const v=await askConfirm(`${roomId==='ex'?'특수 '+bed:bed}번 베드 찜 (준비 중)`, `<p class="small muted" style="margin:0">슬립 쓰는 동안 다른 사람이 이 베드에 환자를 넣지 못하게 잡아둡니다. 이름만 적어도 됩니다.</p>
+          <div class="grid2"><label class="f"><span>등록번호 (선택)</span><input type="text" id="hReg" inputmode="numeric"></label><label class="f"><span>이름 (선택)</span><input type="text" id="hName"></label></div>`, '찜하기');
+        if(!v) break;
+        rec2={id:uid(), createdAt:nowIso(), date:S.date, status:'hold', room:roomId, bed, regNo:(v.hReg||'').trim(), name:(v.hName||'').trim(), items:[], holdBy:S.local.device||''};
+      }
+      await saveRecord(rec2); toast(`${roomId==='ex'?'특수 '+bed:bed}번 베드 준비 중으로 표시했습니다.`); break; }
+    case 'unhold': {
+      if(!confirm('준비 중 표시를 해제할까요?')) break;
+      if(rec.fromWaiting){ const r=withBase(rec); r.status='waiting'; r.bed=null; r.room=''; delete r.fromWaiting; await saveRecord(r); }
+      else { S.records=S.records.filter(r=>r.id!==id); render(); await run(Store.remove(rec,'찜 해제',S.local.device||'')); }
+      break; }
+    case 'startHold': { S.room=rec.room; openStart(+rec.bed, rec); break; }
+    case 'waitSite': openWaitSite(rec); break;
+    case 'saveWaitSite': {
+      const r=withBase(rec); r.ins=$('#wIns').value; r.sites=readChips($('#wSites')); r.side=$('#wSide .on')?.dataset.side||''; r.siteEtc=$('#wSiteEtc').value.trim(); r.memo=$('#wMemo').value.trim();
+      closeDlg(); await saveRecord(r); break; }
+    case 'emrToggle': { const r=withBase(rec); r.emrDone=!r.emrDone; await saveRecord(r); toast(r.emrDone?`${r.name} EMR 입력 완료`:`${r.name} EMR 입력 취소`); break; }
+    case 'copyRec': { if(await copyText(emrOf(rec))) toast(`${rec.name} 기록문을 복사했습니다. EMR에 붙여넣은 뒤 [EMR ✓]를 누르세요.`, '', 5000); break; }
     case 'start': {
       S.room=a.dataset.room||S.room;
+      if(!freeBeds(S.room).includes(+a.dataset.bed)){ toast('방금 다른 기기에서 사용하기 시작한 베드입니다.'); break; }
       const w = S.pickWaiting && S.records.find(r=>r.id===S.pickWaiting);
       openStart(+a.dataset.bed, w); break; }
     case 'pick': S.pickWaiting = S.pickWaiting===id?null:id; render(); break;
@@ -1271,11 +1414,12 @@ document.addEventListener('click', async ev=>{
     case 'plus': case 'minus': { const inp=$('[data-min]',a.closest('.mod')); inp.value=Math.max(1,(parseInt(inp.value)||0)+(act==='plus'?5:-5)); break; }
     case 'doStart': doStart(+a.dataset.bed, a.dataset.wid); break;
     case 'advance': {
-      const r=withBase(rec); const t=nowIso(); advance(r,t);
+      const r=withBase(rec); const dropped=finishRec(r, nowIso());
+      if(!r.items.length){ toast('시작한 치료가 없어 종료할 수 없습니다. [치료 취소]를 사용하세요.'); break; }
       await saveRecord(r);
-      if(r.status==='ended'){ toast(`${bedLabel(r)} 베드 종료 — 경과 기록을 작성하세요.`); openEdit(r.id); } else closeDlg();
+      toast(`${bedLabel(r)} 베드 종료 — 경과 기록을 작성하세요.${dropped.length?` (시작 전이던 ${dropped.join('·')} 제외)`:''}`, '', 6000); openEdit(r.id);
       break; }
-    case 'extend': { const r=withBase(rec); const p=curPhase(r); r.items.forEach(i=>{ if(i.phase===p&&!i.end) i.min+=5; }); closeDlg(); [...S.alarmed].filter(k=>k.startsWith(r.id)).forEach(k=>S.alarmed.delete(k)); await saveRecord(r); break; }
+    case 'extend': { const r=withBase(rec); const p=curPhase(r); r.items.forEach(i=>{ if(i.phase===p&&!i.end) i.min+=5; }); schedule(r); closeDlg(); await saveRecord(r); toast(`${bedLabel(r)} 베드 5분 연장`); break; }
     case 'cancelRun': { const why=prompt('치료 취소 사유 (예: 환자 거부, 잘못 입력)'); if(why===null) break; const r=withBase(rec); r.status='cancelled'; r.cancelReason=why; r.endAt=nowIso(); closeDlg(); await saveRecord(r); break; }
     case 'edit': openEdit(id, a.dataset.date||S.date); break;
     case 'emrReset': { const d=$('#dlg'); d._override=false; $('#eOvNote').textContent=''; a.hidden=true; d._upd(); break; }
@@ -1287,6 +1431,7 @@ document.addEventListener('click', async ev=>{
     case 'doPaste': doPaste(); break;
     case 'ldPrev': case 'ldNext': S.ledgerDate=shiftDate(S.ledgerDate, act==='ldPrev'?-1:1); if(S.ledgerDate===S.date) render(); else loadLedger(); break;
     case 'ldToday': S.ledgerDate=S.date; render(); break;
+    case 'ldFilter': S.ledgerFilter=a.dataset.f; render(); break;
     case 'copySel': {
       const ids=$$('.sel:checked').map(c=>c.value); const rows=(S.ledgerDate===S.date?S.records:S.ledgerRows||[]).filter(r=>ids.includes(r.id) && r.status==='done');
       if(!rows.length){ toast('작성 완료된 기록을 선택하세요.'); break; }
@@ -1338,19 +1483,32 @@ function showPq(rs, q=''){ const l=$('#pqList'); if(!l) return; l.innerHTML=rs.m
 
 function openPaste(){
   openDlg(`<div class="dlg-h"><h2>접수명단 붙여넣기</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
-  <div class="dlg-b"><p class="small muted" style="margin:0">EMR 접수 화면에서 복사해 붙여넣으세요. 한 줄에 한 명, <b>등록번호 이름</b> 순서 (탭·공백 구분). 등록번호가 없는 줄은 건너뜁니다.</p>
+  <div class="dlg-b"><p class="small muted" style="margin:0">EMR 접수 화면에서 복사해 붙여넣으세요. 한 줄에 한 명, <b>등록번호 이름</b> 순서 (탭·공백 구분). 줄에 <b>자보</b>(또는 TA)·<b>산재</b>가 있으면 보험 구분도 표시됩니다. 재진 환자는 지난 부위가 자동으로 들어가고, 대기 목록의 [부위]로 1차 설정할 수 있습니다.</p>
   <textarea id="pasteT" rows="10" placeholder="10234  홍길동&#10;10877  김영희"></textarea><div id="pasteP" class="small muted"></div></div>
   <div class="dlg-f"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="doPaste">대기 명단에 추가</button></div>`);
 }
 function parsePaste(text){
-  return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{ const m=l.match(/^(\d[\w-]*)[\s,\t]+([^\s,\t\d][^\t,]*?)(?:[\t,].*)?$/); return m?{regNo:m[1], name:m[2].trim().split(/\s{2,}/)[0]}:null; }).filter(Boolean);
+  return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{ const m=l.match(/^(\d[\w-]*)[\s,\t]+([^\s,\t\d][^\t,]*?)(?:[\t,].*)?$/); if(!m) return null;
+    const name=m[2].trim().split(/\s{2,}/)[0].replace(/\s+(자보|자동차보험|산재|TA)\s*$/i,'');   // '홍길동 자보' 처럼 띄어 쓴 표시만 (이름 속 글자는 그대로)
+    const rest=l.slice(m[1].length).replace(name,'');   // 이름을 뺀 나머지 칸에서 보험 표시 찾기
+    const ins=/자보|자동차|\bTA\b/i.test(rest)?'자보':/산재/.test(rest)?'산재':'';
+    return {regNo:m[1], name, ins}; }).filter(Boolean);
 }
 async function doPaste(){
   const list=parsePaste($('#pasteT').value); if(!list.length){ $('#pasteP').textContent='인식된 환자가 없습니다. "등록번호 이름" 형식인지 확인하세요.'; return; }
   const exist=new Set(S.records.filter(r=>['waiting','running'].includes(r.status)).map(r=>r.regNo));
   const add=list.filter(p=>!exist.has(p.regNo)); closeDlg();
-  for(const p of add) await saveRecord({id:uid(), createdAt:nowIso(), date:S.date, regNo:p.regNo, name:p.name, status:'waiting', items:[], room:'', bed:null}, {quiet:true});
-  toast(`${add.length}명 대기 명단에 추가${list.length>add.length?` (중복 ${list.length-add.length}명 제외)`:''}`);
+  const recs=[];
+  for(const p of add){ const r={id:uid(), createdAt:nowIso(), date:S.date, regNo:p.regNo, name:p.name, ins:p.ins||'', status:'waiting', items:[], room:'', bed:null}; recs.push(r); await saveRecord(r, {quiet:true}); }
+  toast(`${add.length}명 대기 명단에 추가${list.length>add.length?` (중복 ${list.length-add.length}명 제외)`:''} — 재진 환자는 지난 부위를 불러옵니다.`, '', 5000);
+  // 1차 부위: 재진 환자는 지난 처방의 부위·보험을 미리 채움 (대기 목록의 [부위]로 확인·수정)
+  for(const r of recs){
+    let res; try{ res=await Store.getPatient(r.regNo); }catch(e){ continue; }
+    const pl=res&&res.patient&&res.patient.plan; if(!pl) continue;
+    const cur=S.records.find(x=>x.id===r.id); if(!cur || cur.status!=='waiting' || siteText(cur)) continue;
+    const u=withBase(cur); u.sites=pl.sites||[]; u.side=pl.side||''; if(!u.ins && pl.ins) u.ins=pl.ins;
+    await saveRecord(u, {quiet:true});
+  }
 }
 function openCsv(){
   const first=S.ledgerDate.slice(0,8)+'01';
@@ -1387,7 +1545,7 @@ async function saveSettingsForm(){
     const res=await run(Store.init(S.date),'불러오는 중…');
     S.settings=mergeSettings(res.settings); S.records=res.records||[]; S.version=res.version;
     // 화면을 새로 열었을 때 이미 지난 알람은 다시 울리지 않음
-    const now=Date.now(); for(const r of S.records) if(r.status==='running'){ const p=curPhase(r), rem=recRemain(r,now); if(rem!=null){ if(rem<=-60000) S.alarmed.add(`${r.id}:${p}:0`); if(rem<=-180000) S.alarmed.add(`${r.id}:${p}:2`);} }
+    // 화면을 새로 열었을 때 이미 지난 알람은 checkAlarms 가 소리 없이 넘김
   }catch(e){ $('#main').innerHTML='<div class="empty-note">데이터를 불러오지 못했습니다. 새로고침해 주세요.</div>'; return; }
   if(!S.settings.therapists.length && !S.settings.doctors.length) toast('[설정]에서 처방의·치료사 명단을 먼저 입력하세요.', '', 6000);
   render();

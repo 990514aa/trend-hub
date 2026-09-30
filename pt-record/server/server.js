@@ -29,7 +29,7 @@ const CONFIG_PATH = process.env.PT_CONFIG || path.join(HOME_DIR, 'config.json');
 const LEGACY_CONFIG = path.join(APP_DIR, 'config.json');   // 이전 버전: exe 옆에 저장
 // zip 안에서 바로 실행하면 윈도우가 임시 폴더에 풀어 실행하고 나중에 지운다
 const TEMP_RUN = !!sea && (path.resolve(process.execPath).toLowerCase().startsWith(path.resolve(os.tmpdir()).toLowerCase()) || /\.zip[\\/]/i.test(process.execPath));
-const STATUS_KO = { running: '치료중', ended: '작성대기', done: '작성완료', cancelled: '취소', waiting: '대기' };
+const STATUS_KO = { running: '치료중', ended: '작성대기', done: '작성완료', cancelled: '취소', waiting: '대기', hold: '준비중' };
 
 /* ---------------- 설정 ---------------- */
 function loadConfig() {
@@ -156,13 +156,13 @@ function audit(id, regNo, action, changes, by) {
 }
 function writeCsv(m) {
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const H = ['날짜', '등록번호', '이름', '구분', '치료실', '베드', '치료항목', '시작', '종료', '소요(분)', '처방의', '시행자', '상태', 'EMR입력', 'EMR 기록문', '수정일시', '수정기기'];
-  const rows = Object.values(recMonth(m)).filter(r => r.status !== 'waiting').sort((a, b) => String(a.startAt || '').localeCompare(String(b.startAt || '')));
+  const H = ['날짜', '등록번호', '이름', '구분', '보험', '치료실', '베드', '치료항목', '시작', '종료', '소요(분)', '처방의', '시행자', '상태', 'EMR입력', 'EMR 기록문', '수정일시', '수정기기'];
+  const rows = Object.values(recMonth(m)).filter(r => r.status !== 'waiting' && r.status !== 'hold').sort((a, b) => String(a.startAt || '').localeCompare(String(b.startAt || '')));
   const lines = [H.map(q).join(',')];
   for (const r of rows) {
     const st = (r.items || []).map(i => i.start).filter(Boolean).sort()[0] || r.startAt;
     const en = (r.items || []).map(i => i.end).filter(Boolean).sort().pop() || r.endAt;
-    lines.push([r.date, r.regNo, r.name, r.visit, r.room === 'ex' ? '운동·특수' : '물리치료실', r.bed,
+    lines.push([r.date, r.regNo, r.name, r.visit, r.ins || '건강보험', r.room === 'ex' ? '운동·특수' : '물리치료실', r.bed,
       (r.items || []).map(i => `${i.mid} ${i.min}분`).join(', '), hm(st), hm(en), st && en ? Math.round((new Date(en) - new Date(st)) / 60000) : '',
       r.doctor, r.therapist, STATUS_KO[r.status] || r.status, r.emrDone ? 'Y' : '', r.emrText, r.updatedAt, r.updatedBy].map(q).join(','));
   }
@@ -172,7 +172,7 @@ function readPatients() { return readJSON(P('patients.json'), {}); }
 function rememberPatient(pats, rec) {
   const p = pats[rec.regNo] || { regNo: rec.regNo, memo: '' };
   p.name = rec.name;
-  p.plan = { room: rec.room, visit: rec.visit, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
+  p.plan = { room: rec.room, visit: rec.visit, ins: rec.ins, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
     items: (rec.items || []).map(i => ({ mid: i.mid, min: i.min, phase: i.phase, params: i.params })), date: rec.date };
   p.updatedAt = new Date().toISOString(); pats[rec.regNo] = p;
 }
@@ -210,7 +210,7 @@ const API = {
   getPatient(regNo) {
     regNo = String(regNo || '').trim();
     const records = [];
-    for (const m of allMonths()) for (const r of Object.values(recMonth(m))) if (r.regNo === regNo && r.status !== 'waiting') records.push(r);
+    for (const m of allMonths()) for (const r of Object.values(recMonth(m))) if (r.regNo === regNo && r.status !== 'waiting' && r.status !== 'hold') records.push(r);
     records.sort((a, b) => String(b.startAt || '').localeCompare(String(a.startAt || '')));
     return { patient: readPatients()[regNo] || null, records };
   },

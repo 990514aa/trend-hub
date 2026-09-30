@@ -19,7 +19,7 @@ var REC_HEADERS = ['ID', '날짜', '등록번호', '이름', '구분', '치료�
 var COL = { id: 1, regNo: 3, status: 14, data: 19 };
 var PAT_HEADERS = ['등록번호', '이름', '메모', '최근처방', '수정일시'];
 var AUDIT_HEADERS = ['일시', '기록ID', '등록번호', '작업', '변경내용', '기기'];
-var STATUS_KO = { running: '치료중', ended: '작성대기', done: '작성완료', cancelled: '취소', waiting: '대기' };
+var STATUS_KO = { running: '치료중', ended: '작성대기', done: '작성완료', cancelled: '취소', waiting: '대기', hold: '준비중' };
 
 /* ---------------- 웹앱 ---------------- */
 function doGet() {
@@ -125,7 +125,7 @@ var API_ = {
         .createTextFinder(regNo).matchEntireCell(true).findAll();
       for (var c = 0; c < cells.length; c++) {
         var r = JSON.parse(sh.getRange(cells[c].getRow(), COL.data).getValue() || 'null');
-        if (r && r.status !== 'waiting') records.push(r);
+        if (r && r.status !== 'waiting' && r.status !== 'hold') records.push(r);
       }
     }
     records.sort(function (a, b) { return String(b.startAt || '').localeCompare(String(a.startAt || '')); });
@@ -272,7 +272,7 @@ function rememberPatient_(rec) {
   savePatientRow_({
     regNo: rec.regNo, name: rec.name, memo: cur.memo,
     plan: {
-      room: rec.room, visit: rec.visit, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
+      room: rec.room, visit: rec.visit, ins: rec.ins, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
       items: (rec.items || []).map(function (i) { return { mid: i.mid, min: i.min, phase: i.phase, params: i.params }; }),
       date: rec.date
     }
