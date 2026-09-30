@@ -331,6 +331,9 @@ const MODALITIES = [
     tpl:'{type}, 에너지 {energy}, {shots}shots, {freq}Hz, {target}',
     basis:'체외충격파치료[근골격계질환](비급여, SZ084). 신의료기술 재평가상 조건부 권고 적응증: 석회성 어깨 건병증, 대전자 통증 증후군, 만성 족저근막염, 아킬레스·무릎 건병증, 불유합·지연유합, 근막통증증후군. 상병과 적응증 일치 여부 확인.' },
 ];
+// 추가 처방(치료 중 처방 추가) 기본 시점: now=지금 바로 같이, after=지금 치료 끝나고 이어서, off=추가 처방 목록에 안 보임 — 설정의 치료 항목 표에서 조정
+MODALITIES.forEach(m=>{ if(!m.addRx) m.addRx = m.solo ? 'off' : (m.phase>1 || m.orderChoice || m.group==='manual') ? 'after' : 'now'; });
+const ADDRX_LABEL = {now:'지금 바로 같이', after:'끝나고 이어서', off:'안 씀'};
 const PHRASES = {
   pre:['통증 호소','움직임 시 통증 호소','뻣뻣함(강직감) 호소','방사통 호소','저림 호소','근긴장도 증가 관찰됨','관절가동범위 제한 관찰됨','부종 관찰됨','열감 관찰됨'],
   during:['특이 이상반응 없음 확인','치료 중 피부 상태 수시 확인함','치료 중 강도 적절하다고 표현함','어지러움·두통 등 부작용 없음 확인','치료 중 통증 증가 호소하여 강도 조절함','치료 중 체위 불편 호소하여 자세 조정함'],
@@ -544,7 +547,7 @@ function schedule(r){
   let cursor=null;
   for(const p of phasesOf(r)){
     const its=r.items.filter(i=>i.phase===p);
-    if(cursor!=null) its.forEach(i=>{ if(!i.end) i.start=new Date(cursor).toISOString(); });
+    if(cursor!=null) its.forEach(i=>{ if(!i.end && !i.late) i.start=new Date(cursor).toISOString(); });
     const e=phaseEnd(r,p); if(e==null) break; cursor=e;
   }
   return r;
@@ -918,9 +921,47 @@ function openBedMenu(r){
       <div class="chips">${freeBeds(r.room).map(b=>`<button type="button" class="chip" data-act="moveBed" data-id="${r.id}" data-bed="${b}">${r.room==='ex'?'특'+b:b+'번'}</button>`).join('')||'<span class="small muted">빈 베드 없음</span>'}</div></div>
   </div>
   <div class="dlg-f"><button class="btn bad" data-act="cancelRun" data-id="${r.id}">치료 취소</button><span class="grow"></span>
+    <button class="btn pri" data-act="addRx" data-id="${r.id}">＋ 추가 처방</button>
     <button class="btn" data-act="edit" data-id="${r.id}">기록 보기·수정</button>
     <button class="btn" data-act="extend" data-id="${r.id}">+5분 연장</button>
     <button class="btn ok" data-act="advance" data-id="${r.id}">치료 종료</button></div>`);
+}
+/** 치료 중 처방 추가 (처방을 깜빡했을 때) */
+function openAddRx(r){
+  if(!r || r.status!=='running'){ toast('치료 중인 환자에게만 추가할 수 있습니다.'); return; }
+  schedule(r);
+  const have=new Set(r.items.map(i=>i.mid));
+  const soloNow=r.items.some(i=>MOD(i.mid)?.solo);
+  const avail=mods().filter(m=>m.enabled && inRoom(m, r.room) && m.addRx!=='off' && !have.has(m.id) && !(m.solo || soloNow));
+  const nowNames=r.items.filter(i=>i.phase===curPhase(r)).map(i=>MOD(i.mid)?.en||i.mid).join('+');
+  openDlg(`<div class="dlg-h"><h2>＋ 추가 처방 — ${bedLabel(r)} 베드 ${esc(r.regNo)} ${esc(r.name)}</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
+  <div class="dlg-b" id="axBody">
+    <p class="small muted" style="margin:0">지금 진행 중: <b>${esc(nowNames)}</b> · 예정 종료 ${hm(new Date(phaseEnd(r,lastPhase(r))).toISOString())}. 추가할 치료를 체크하고 시점을 고르세요.</p>
+    <div class="list" id="axMods">${avail.map(m=>{ const [bg,bd]=modColor(m.id); return `<div class="mod" data-mod="${m.id}" style="--mbg:${bg};--mbd:${bd}">
+      <div class="mod-h"><label class="row" style="gap:8px;flex:1;min-width:0"><input type="checkbox" data-on> <span class="nm">${esc(m.name)}</span> <span class="muted small">${esc(m.en)} · ${esc(m.code)}</span></label>
+      <input type="number" data-min min="1" max="120" value="${m.min}" style="width:64px"> 분
+      <select data-when style="width:auto">${['now','after'].map(k=>`<option value="${k}" ${k===m.addRx?'selected':''}>${ADDRX_LABEL[k]}</option>`).join('')}</select></div></div>`; }).join('')||'<div class="small muted">추가할 수 있는 치료가 없습니다. (이미 들어 있거나 설정에서 \'안 씀\'으로 되어 있음)</div>'}</div>
+    <p class="small muted" style="margin:0"><b>지금 바로 같이</b>: 지금 시각부터 함께 시작 · <b>끝나고 이어서</b>: 예정된 치료가 모두 끝나면 자동으로 이어서 시작. 기본 시점은 [설정] → 치료 항목에서 바꿀 수 있습니다.</p>
+    <div id="axWarn"></div>
+  </div>
+  <div class="dlg-f"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="saveAddRx" data-id="${r.id}">추가</button></div>`);
+  $('#axMods').addEventListener('change', e=>{ const m=e.target.closest('.mod'); if(m && e.target.matches('[data-on]')) m.classList.toggle('on', e.target.checked); });
+}
+async function saveAddRx(rec){
+  if(!rec || rec.status!=='running'){ closeDlg(); toast('이미 종료된 치료입니다.'); return; }
+  const rows=$$('#axMods .mod').filter(el=>$('[data-on]',el).checked);
+  if(!rows.length){ $('#axWarn').innerHTML='<div class="errbox">추가할 치료를 체크하세요.</div>'; return; }
+  const r=withBase(rec); schedule(r);
+  const now=nowIso(), cp=curPhase(r), lp=lastPhase(r), added=[];
+  for(const el of rows){
+    const mid=el.dataset.mod, m=MOD(mid), min=Math.max(1,parseInt($('[data-min]',el).value)||m.min), when=$('[data-when]',el).value;
+    const defs=Object.fromEntries((m.fields||[]).filter(f=>f.def!=null && f.type!=='textarea').map(f=>[f.k,f.def]));
+    const it={mid, min, params:defs, start:null, end:null, addedAt:now};
+    if(when==='now'){ it.phase=cp; it.start=now; it.late=true; } else { it.phase=lp+1; }
+    r.items.push(it); added.push(`${m.en||m.name} ${min}분(${ADDRX_LABEL[when]})`);
+  }
+  schedule(r); closeDlg(); await saveRecord(r);
+  toast(`${bedLabel(r)} 베드 ${r.name} 추가 처방: ${added.join(', ')}`, '', 5000);
 }
 /** 종료를 잘못 누른 기록(작성 대기)을 다시 치료 중으로 — bed 생략 시 원래 베드, 차 있으면 빈 베드 고르기 */
 async function resumeRec(rec, bed){
@@ -1095,14 +1136,15 @@ function renderSettings(){
   </div>
   <div class="panel" style="margin-top:12px">
     <h2>치료 항목</h2>
-    <p class="small muted">병원 수가표에 맞춰 코드·급여구분·기본시간을 조정하세요. '순서' 숫자가 같은 항목은 동시에, 큰 항목은 앞 치료가 끝나면 자동으로 이어서 진행됩니다(예: IR·ICT 1 → 레이저 2).</p>
-    <div class="tablewrap"><table class="t" id="stModTable"><thead><tr><th>사용</th><th>이름</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간(분)</th><th>순서 <span class='muted'>(같으면 동시·크면 이어서)</span></th></tr></thead><tbody>
+    <p class="small muted">병원 수가표에 맞춰 코드·급여구분·기본시간을 조정하세요. '추가 처방 시'는 치료 도중 [＋ 추가 처방]으로 넣을 때 기본 시점입니다(안 씀 = 목록에서 숨김). '순서' 숫자가 같은 항목은 동시에, 큰 항목은 앞 치료가 끝나면 자동으로 이어서 진행됩니다(예: IR·ICT 1 → 레이저 2).</p>
+    <div class="tablewrap"><table class="t" id="stModTable"><thead><tr><th>사용</th><th>이름</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간(분)</th><th>순서 <span class='muted'>(같으면 동시·크면 이어서)</span></th><th>추가 처방 시</th></tr></thead><tbody>
     ${mods().map(m=>`<tr data-mod="${m.id}"><td><input type="checkbox" data-k="enabled" ${m.enabled?'checked':''}></td>
       <td><input type="text" data-k="name" value="${esc(m.name)}"></td><td><input type="text" data-k="code" value="${esc(m.code)}" style="width:90px"></td>
       <td><select data-k="coverage">${['급여','비급여'].map(o=>`<option ${o===m.coverage?'selected':''}>${o}</option>`).join('')}</select></td>
       <td><select data-k="room">${s.rooms.map(r=>`<option value="${r.id}" ${r.id===m.room?'selected':''}>${esc(r.name)}</option>`).join('')}</select></td>
       <td><input type="number" data-k="min" min="1" max="120" value="${m.min}" style="width:70px"></td>
-      <td><input type="number" data-k="phase" min="1" max="5" value="${m.phase}" style="width:60px"></td></tr>`).join('')}
+      <td><input type="number" data-k="phase" min="1" max="5" value="${m.phase}" style="width:60px"></td>
+      <td><select data-k="addRx">${Object.entries(ADDRX_LABEL).map(([k,v])=>`<option value="${k}" ${k===m.addRx?'selected':''}>${v}</option>`).join('')}</select></td></tr>`).join('')}
     </tbody></table></div>
   </div>
   <div class="grid2" style="margin-top:12px">
@@ -1388,7 +1430,7 @@ async function openEdit(id, date){
       <div class="row" style="margin:4px 0"><div class="seg" id="eSide">${['Rt.','Lt.','Both',''].map(o=>`<button type="button" data-side="${o}" class="${(r.side||'')===o?'on':''}">${o||'좌우 없음'}</button>`).join('')}</div>
       <input type="text" id="eSiteEtc" value="${esc(r.siteEtc||'')}" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
       ${chipGroup('eSites', [...new Set([...S.settings.sites, ...(r.sites||[])])], r.sites)}</details>
-    <h3>치료 항목 · 시간</h3>
+    <h3 class="row">치료 항목 · 시간<span class="grow"></span>${r.status==='running'&&r.date===S.date?`<button type="button" class="btn sm pri" data-act="addRx" data-id="${r.id}">＋ 추가 처방</button>`:''}</h3>
     <div class="list">${r.items.map(it=>{ const m=MOD(it.mid)||{id:it.mid,name:it.mid,fields:[]}; return `<div class="mod on" data-emod="${it.mid}">
       <div class="mod-h"><span class="nm">${esc(m.name)}</span><span class="muted small">${esc(m.en||'')} · ${esc(m.code||'')} · 설정 ${it.min}분${it.start&&it.end?` · 실제 ${mins(it.start,it.end)}분`:''}</span></div>
       ${isFixed(m) ? fixedView(m, it) : modEditor(m, it, true)}</div>`; }).join('')}</div>
@@ -1592,6 +1634,8 @@ document.addEventListener('click', async ev=>{
     case 'room': S.room=a.dataset.room; S.local.room=S.room; saveLocal(); render(); break;
     case 'bedMenu': if(rec) openBedMenu(rec); break;
     case 'resume': resumeRec(rec); break;
+    case 'addRx': openAddRx(rec); break;
+    case 'saveAddRx': saveAddRx(rec); break;
     case 'resumeTo': resumeRec(rec, +a.dataset.bed); break;
     case 'moveBed': {
       const nb=+a.dataset.bed; if(!freeBeds(rec.room).includes(nb)){ toast('이미 사용 중인 베드입니다.'); break; }
