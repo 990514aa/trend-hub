@@ -44,7 +44,7 @@ PKG="$OUT/$NAME"
 rm -rf "$PKG" "$OUT/$NAME.zip"; mkdir -p "$PKG"
 cp "$OUT/$NAME.exe" "$PKG/"
 { printf '\xef\xbb\xbf'; sed 's/$/\r/' 사용방법.txt; } > "$PKG/사용방법.txt"   # 메모장용 BOM·CRLF
-[ -f ../사용안내.html ] && cp ../사용안내.html "$PKG/사용안내(튜토리얼).html"   # 화면 사진이 든 초보자 안내 (더블클릭 → 브라우저)
+[ -f ../사용안내.pdf ] && cp ../사용안내.pdf "$PKG/사용안내.pdf"   # 화면 사진이 든 초보자 안내 (PDF, 10쪽)
 # 한글 파일명이 윈도우 탐색기에서 깨지지 않도록 UTF-8 플래그가 붙는 파이썬 zipfile 사용
 (cd "$OUT" && python3 - "$NAME" <<'PY'
 import sys, os, zipfile
