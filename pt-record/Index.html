@@ -339,6 +339,14 @@ const PRESETS = {
     {name:'복합운동', items:['complexEx']},
   ],
 };
+/** 빠른 선택 목록: [설정]에서 만든 것이 있으면 그것, 없으면 기본 목록 */
+const presetsOf = room => (S.settings.presets && Array.isArray(S.settings.presets[room])) ? S.settings.presets[room] : (PRESETS[room]||[]);
+/** 빠른 선택 한 줄 요약: IR 15분 + ICT 15분 → LLLT 5분 */
+function presetSummary(p){
+  const ph = id => { const o=p.order&&p.order[id]; return o==='before'?0:o==='after'?3:(MOD(id)?.phase||1); };
+  const groups={}; for(const id of p.items){ (groups[ph(id)]=groups[ph(id)]||[]).push(id); }
+  return Object.keys(groups).sort((a,b)=>a-b).map(k=>groups[k].map(id=>`${MOD(id)?.en||id} ${(p.min&&p.min[id])||MOD(id)?.min||''}분`).join(' + ')).join(' → ');
+}
 const DEFAULT_SETTINGS = {
   rooms:[{id:'pt', name:'물리치료실', beds:12, first:1}, {id:'ex', name:'운동·특수치료실', beds:4, first:1}],
   hospital:'연세오케이정형외과',
@@ -1039,6 +1047,7 @@ function renderSettings(){
     </tbody></table></div>
   </div>
   <div class="grid2" style="margin-top:12px">
+    <div class="panel" id="presetPanel" style="grid-column:1/-1">${presetPanelHtml()}</div>
     <div class="panel"><h2>부위 버튼</h2><textarea id="stSites" rows="6">${esc(s.sites.join('\n'))}</textarea></div>
     <div class="panel"><h2>치료 전 문구</h2><textarea id="stPre" rows="6">${esc(ph('pre'))}</textarea></div>
     <div class="panel"><h2>치료 중 문구</h2><textarea id="stDuring" rows="6">${esc(ph('during'))}</textarea></div>
@@ -1058,6 +1067,53 @@ async function loadServerInfo(){
       <div class="small muted">웹 링크가 아니라 PC의 폴더 경로를 넣습니다 (예: G:\\내 드라이브\\물리치료기록). PC에 'Google Drive 데스크톱'이 설치·로그인돼 있어야 하며, 새 폴더가 비어 있으면 기존 데이터를 복사합니다.</div>`:esc(i.dataDir)}</span>
     <span class="muted">자동 백업</span><span>${esc(i.backupDir||'')}<div class="small muted">매일 데이터 폴더 전체를 날짜별로 복사해 30일치 보관합니다. 저장할 때마다 직전 파일도 .bak 으로 남깁니다.</div></span>
     <span class="muted">접속 PIN</span><span>${i.isLocal?`<span class="row"><input type="text" id="srvPin" placeholder="${i.pinSet?'설정됨 — 바꾸려면 새 PIN 입력':'숫자 4~6자리 권장'}" class="grow" inputmode="numeric"><button class="btn sm" data-act="setPin">저장</button></span><div class="small muted">다른 기기는 처음 접속할 때 한 번 입력합니다. 병원 와이파이에 외부인이 접속할 수 있다면 꼭 설정하세요. 비워서 저장하면 PIN 해제.</div>`:(i.pinSet?'설정됨':'없음')}</span></div>`;
+}
+
+/* ---------- 빠른 선택 관리 ---------- */
+function presetPanelHtml(){
+  const custom = !!S.settings.presets;
+  return `<div class="row"><h2 class="grow" style="margin:0">빠른 선택</h2>${custom?'<button class="btn sm" data-act="presetReset">기본 목록으로 되돌리기</button>':''}</div>
+  <p class="small muted" style="margin:4px 0 10px">치료 시작 창 위쪽의 빠른 선택 버튼입니다. 누르면 치료 항목·시간·순서가 한 번에 선택됩니다. 치료 시작 창의 [＋ 지금 선택 저장]으로도 추가할 수 있습니다.</p>
+  <div class="grid2">${S.settings.rooms.map(room=>{ const list=presetsOf(room.id); return `<div>
+    <div class="row" style="margin-bottom:6px"><b class="grow">${esc(room.name)}</b><button class="btn sm pri" data-act="presetEdit" data-room="${room.id}" data-i="-1">＋ 추가</button></div>
+    <div class="list">${list.map((p,i)=>`<div class="item"><div class="grow" style="min-width:0"><b>${esc(p.name)}</b><div class="small muted">${esc(presetSummary(p))}</div></div>
+      <button class="btn sm" data-act="presetMove" data-room="${room.id}" data-i="${i}" data-d="-1" ${i?'':'disabled'} title="위로">↑</button>
+      <button class="btn sm" data-act="presetMove" data-room="${room.id}" data-i="${i}" data-d="1" ${i<list.length-1?'':'disabled'} title="아래로">↓</button>
+      <button class="btn sm" data-act="presetEdit" data-room="${room.id}" data-i="${i}">수정</button>
+      <button class="btn sm bad" data-act="presetDel" data-room="${room.id}" data-i="${i}">✕</button></div>`).join('')||'<div class="small muted">없음</div>'}</div></div>`; }).join('')}</div>`;
+}
+/** 빠른 선택 저장 (다른 설정 입력칸은 건드리지 않도록 이 목록만 저장) */
+async function savePresets(room, list){
+  const presets = clone(S.settings.presets || PRESETS);
+  presets[room] = list;
+  const s = {...clone(S.settings), presets};
+  await run(Store.saveSettings(s)); S.settings = mergeSettings(s);
+  const panel=$('#presetPanel'); if(panel) panel.innerHTML=presetPanelHtml();
+}
+function openPresetEditor(room, i){
+  const list=presetsOf(room), p = i>=0 ? list[i] : {name:'', items:[], order:{}, min:{}};
+  const avail=mods().filter(m=>m.enabled && inRoom(m, room));
+  openDlg(`<div class="dlg-h"><h2>빠른 선택 ${i>=0?'수정':'추가'} — ${esc(roomName(room))}</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
+  <div class="dlg-b">
+    <label class="f req"><span>이름 (버튼에 표시)</span><input type="text" id="pName" value="${esc(p.name)}" placeholder="예: IR + ICT 10분"></label>
+    <div class="small muted">포함할 치료를 체크하고 시간을 정하세요. 레이저는 앞 치료가 끝나면 자동으로 이어서, 단순운동은 순서를 고릅니다.</div>
+    <div class="list" id="pMods">${avail.map(m=>{ const on=p.items.includes(m.id); return `<div class="mod ${on?'on':''}" data-mod="${m.id}"><div class="mod-h">
+      <label class="row nm"><input type="checkbox" data-on ${on?'checked':''}> ${esc(m.name)} <span class="muted small">${esc(m.en)}${m.coverage==='비급여'?' · 비급여':''}</span></label><span class="grow"></span>
+      <span class="mins"><button type="button" class="btn sm" data-act="minus">−</button><input type="text" inputmode="numeric" data-min value="${(p.min&&p.min[m.id])||m.min}"><span class="small">분</span><button type="button" class="btn sm" data-act="plus">＋</button></span>
+      ${m.orderChoice?`<select data-order style="width:auto"><option value="after" ${(p.order&&p.order[m.id])!=='before'?'selected':''}>끝나고 이어서</option><option value="before" ${(p.order&&p.order[m.id])==='before'?'selected':''}>먼저(선행)</option></select>`:m.phase>1?`<span class="small muted" style="min-width:92px">앞 치료 후 이어서</span>`:`<span style="min-width:92px"></span>`}
+    </div></div>`; }).join('')}</div>
+    <div id="pWarn"></div>
+  </div>
+  <div class="dlg-f"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="presetSave" data-room="${room}" data-i="${i}">저장</button></div>`);
+  $('#pMods').addEventListener('change', ev=>{ if(ev.target.dataset.on!==undefined) ev.target.closest('.mod').classList.toggle('on', ev.target.checked); });
+}
+/** 대화상자의 체크·시간·순서 → 빠른 선택 한 개 */
+function readPresetFrom(box){
+  const items=[], min={}, order={};
+  for(const el of $$('.mod', box)){ if(!$('[data-on]',el).checked) continue; const id=el.dataset.mod; items.push(id);
+    const v=parseInt($('[data-min]',el).value); if(v && v!==MOD(id)?.min) min[id]=v;
+    const o=$('[data-order]',el)?.value; if(o) order[id]=o; }
+  return {items, min, order};
 }
 
 /* ===================== 대화상자: 치료 시작 ===================== */
@@ -1105,7 +1161,8 @@ async function openStart(bed, waitingRec){
       <label class="f"><span>시작 시각</span><input type="time" id="sStart" value="${hm(nowIso())}"></label>
     </div>
     <div id="sPlanNote" class="small muted" style="min-height:1.5em"></div>
-    <div><div class="small muted" style="margin-bottom:4px">빠른 선택</div><div class="chips">${(PRESETS[room]||[]).map((p,i)=>p.items.every(id=>MOD(id)?.enabled&&inRoom(MOD(id),room))?`<button type="button" class="chip" data-act="preset" data-i="${i}">${esc(p.name)}</button>`:'').join('')}
+    <div><div class="small muted" style="margin-bottom:4px">빠른 선택</div><div class="chips">${presetsOf(room).map((p,i)=>p.items.every(id=>MOD(id)?.enabled&&inRoom(MOD(id),room))?`<button type="button" class="chip" data-act="preset" data-i="${i}" title="${esc(presetSummary(p))}">${esc(p.name)}</button>`:'').join('')}
+      <button type="button" class="chip" data-act="savePresetFromStart" data-room="${room}" style="border-style:dashed" title="지금 고른 치료 조합을 빠른 선택에 추가">＋ 지금 선택 저장</button>
       <span class="small muted" style="align-self:center;margin-left:6px">전체 시간:</span>${[10,15,20].map(n=>`<button type="button" class="chip" data-act="allMin" data-n="${n}">${n}분</button>`).join('')}</div></div>
     <div class="list" id="sMods">${avail.map(m=>`<div class="mod" data-mod="${m.id}"><div class="mod-h">
       <label class="row nm"><input type="checkbox" data-on> ${esc(m.name)} <span class="muted small">${esc(m.en)} · ${esc(m.code)}${m.coverage==='비급여'?' · 비급여':''}</span></label><span class="grow"></span>
@@ -1123,15 +1180,16 @@ async function openStart(bed, waitingRec){
     <div id="sWarn"></div>
   </div>
   <div class="dlg-f"><button class="btn" data-act="close">취소</button><button class="btn pri" data-act="doStart" data-bed="${bed}" data-wid="${esc(w.id||'')}">▶ 치료 시작</button></div>`);
-  const applyItems = (ids, from, order) => {
-    $$('#sMods .mod').forEach(el=>{ const on=ids.includes(el.dataset.mod); el.classList.toggle('on',on); $('[data-on]',el).checked=on;
-      const sel=$('[data-order]',el), pi=from&&from.find(i=>i.mid===el.dataset.mod);
-      if(sel) sel.value = (order&&order[el.dataset.mod]) || (pi ? (pi.phase<1?'before':'after') : 'after');
-      if(pi) $('[data-min]',el).value=pi.min; });
+  const applyItems = (ids, from, order, mins) => {
+    $$('#sMods .mod').forEach(el=>{ const id=el.dataset.mod, on=ids.includes(id); el.classList.toggle('on',on); $('[data-on]',el).checked=on;
+      const sel=$('[data-order]',el), pi=from&&from.find(i=>i.mid===id);
+      if(sel) sel.value = (order&&order[id]) || (pi ? (pi.phase<1?'before':'after') : 'after');
+      if(pi) $('[data-min]',el).value=pi.min;
+      else if(mins) $('[data-min]',el).value = mins[id] || MOD(id)?.min; });
   };
-  applyItems((PRESETS[room]||[])[0]?.items||[]);
+  { const p0=presetsOf(room)[0]; applyItems(p0?.items||[], null, p0?.order, p0?.min||{}); }
   d._params={}; d._touched=false;
-  d._applyPreset=i=>{ d._touched=true; applyItems(PRESETS[room][i].items, null, PRESETS[room][i].order); };
+  d._applyPreset=i=>{ const p=presetsOf(room)[i]; d._touched=true; applyItems(p.items, null, p.order, p.min||{}); };
   $('#sMods').addEventListener('input', ()=>{ d._touched=true; });
   // 따로 기록하는 항목(충격파)은 다른 항목과 함께 선택할 수 없음
   $('#sMods').addEventListener('change', ev=>{
@@ -1505,6 +1563,28 @@ document.addEventListener('click', async ev=>{
     case 'pickCancel': S.pickWaiting=null; render(); break;
     case 'unwait': if(confirm('대기 명단에서 삭제할까요?')){ S.records=S.records.filter(r=>r.id!==id); render(); await run(Store.remove(rec,'대기 삭제',S.local.device)); } break;
     case 'preset': $('#dlg')._applyPreset(+a.dataset.i); break;
+    case 'presetEdit': openPresetEditor(a.dataset.room, +a.dataset.i); break;
+    case 'presetSave': {
+      const room=a.dataset.room, i=+a.dataset.i, name=$('#pName').value.trim(), p={name, ...readPresetFrom($('#pMods'))};
+      const err = !name ? '이름을 입력하세요.' : !p.items.length ? '치료 항목을 하나 이상 체크하세요.' : (p.items.length>1 && p.items.some(id=>MOD(id)?.solo)) ? '충격파(비급여)는 다른 치료와 함께 묶을 수 없습니다.' : '';
+      if(err){ $('#pWarn').innerHTML=`<div class="errbox">${err}</div>`; break; }
+      const list=clone(presetsOf(room)); if(i>=0) list[i]=p; else list.push(p);
+      closeDlg(); await savePresets(room, list); toast(`빠른 선택 '${name}' 저장`); break; }
+    case 'presetDel': { const room=a.dataset.room, i=+a.dataset.i, list=clone(presetsOf(room)); if(!confirm(`'${list[i].name}' 빠른 선택을 삭제할까요?`)) break; list.splice(i,1); await savePresets(room, list); break; }
+    case 'presetMove': { const room=a.dataset.room, i=+a.dataset.i, j=i+(+a.dataset.d), list=clone(presetsOf(room)); if(j<0||j>=list.length) break; [list[i],list[j]]=[list[j],list[i]]; await savePresets(room, list); break; }
+    case 'presetReset': { if(!confirm('빠른 선택을 기본 목록으로 되돌릴까요? 직접 만든 빠른 선택은 지워집니다.')) break;
+      const s={...clone(S.settings)}; delete s.presets; s.presets=null; await run(Store.saveSettings(s)); S.settings=mergeSettings(s); $('#presetPanel').innerHTML=presetPanelHtml(); break; }
+    case 'savePresetFromStart': {
+      const room=a.dataset.room, p=readPresetFrom($('#sMods'));
+      if(!p.items.length){ toast('먼저 치료 항목을 선택하세요.'); break; }
+      if(p.items.length>1 && p.items.some(id=>MOD(id)?.solo)){ toast('충격파(비급여)는 다른 치료와 함께 묶을 수 없습니다.'); break; }
+      const v=await askConfirm('빠른 선택으로 저장', `<p class="small muted" style="margin:0">${esc(presetSummary(p))}</p><label class="f"><span>이름 (버튼에 표시)</span><input type="text" id="qpName" value="${esc(presetSummary(p).replace(/ \d+분/g,''))}"></label>`, '저장');
+      if(!v || !(v.qpName||'').trim()) break;
+      const list=clone(presetsOf(room)); list.push({name:v.qpName.trim(), ...p});
+      await savePresets(room, list);
+      // 시작 창의 빠른 선택 버튼 줄에 바로 반영
+      const i=list.length-1, btn=document.createElement('button'); btn.type='button'; btn.className='chip'; btn.dataset.act='preset'; btn.dataset.i=i; btn.textContent=v.qpName.trim(); a.before(btn);
+      toast(`빠른 선택 '${v.qpName.trim()}' 추가`); break; }
     case 'allMin': $$('#sMods .mod').forEach(el=>{ if($('[data-on]',el).checked) $('[data-min]',el).value=a.dataset.n; }); break;
     case 'plus': case 'minus': { const inp=$('[data-min]',a.closest('.mod')); inp.value=Math.max(1,(parseInt(inp.value)||0)+(act==='plus'?5:-5)); break; }
     case 'doStart': doStart(+a.dataset.bed, a.dataset.wid); break;
