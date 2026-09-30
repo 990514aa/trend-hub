@@ -985,7 +985,7 @@ function renderGuide(){
       <li>시작·종료 시각은 버튼을 누른 실제 시각으로 기록되며, 나중에 수정하면 <b>수정 이력</b>(누가·언제·무엇을)이 남습니다.</li>
     </ul>
     <h3>경과(치료 후 상태) 문구 주의</h3>
-    <p class="small">모든 환자에게 같은 문구를 쓰면 심사·실사에서 형식적 기록으로 지적될 수 있습니다. 문구 버튼은 입력을 돕는 용도이며, NRS 변화나 환자 표현을 함께 적어 환자별로 다르게 기록하세요.</p>
+    <p class="small">모든 환자에게 같은 문구를 쓰면 심사·실사에서 형식적 기록으로 지적될 수 있습니다. 문구 버튼은 입력을 돕는 용도이며, 통증 변화나 환자 표현을 함께 적어 환자별로 다르게 기록하세요.</p>
   </div>`;
 }
 
@@ -1077,6 +1077,7 @@ function fixedView(m, it){
 function chipGroup(id, list, sel){ return `<div class="chips" id="${id}" data-multi="1">${list.map(o=>`<button type="button" class="chip ${(sel||[]).includes(o)?'on':''}" data-chip>${esc(o)}</button>`).join('')}</div>`; }
 function selectOpts(list, v, ph){ if(!v && list.length===1) v=list[0]; const L=[...list]; if(v && !L.includes(v)) L.unshift(v); return `<option value="">${ph||'선택'}</option>`+L.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join(''); }
 const readChips = el => el ? $$('.chip.on', el).map(b=>b.textContent) : [];
+// NRS 입력은 없앰 (선택 항목이 많아 불편) — 예전 기록의 값만 기록문에 표시
 const nrsSel = (id, v) => `<select id="${id}" style="width:auto"><option value="">NRS -</option>${[...Array(11).keys()].map(n=>`<option value="${n}" ${String(v)===String(n)?'selected':''}>NRS ${n}</option>`).join('')}</select>`;
 
 async function openStart(bed, waitingRec){
@@ -1107,7 +1108,7 @@ async function openStart(bed, waitingRec){
         <input type="text" id="sSiteEtc" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
         ${chipGroup('sSites', S.settings.sites, [])}</div>
       <label class="f" style="grid-column:1/-1"><span>치료 전 상태 (지금 입력하거나 종료 후 입력)</span>${chipGroup('sPre', phrases('pre'), [])}</label>
-      <div class="row">${nrsSel('sPreN','')}<input type="text" id="sPreT" placeholder="환자 호소 (예: 좌측 어깨 들어올릴 때 통증)" class="grow"></div>
+ <div class="row"><input type="text" id="sPreT" placeholder="환자 호소 (예: 좌측 어깨 들어올릴 때 통증)" class="grow"></div>
     </div>
     <div id="sWarn"></div>
   </div>
@@ -1227,7 +1228,7 @@ async function doStart(bed, wid){
     doctor:$('#sDoctor').value, therapist:$('#sTher').value,
     dx:plan.dx||'', sites:readChips($('#sSites')), side:$('#sSide .on')?.dataset.side||'', siteEtc:$('#sSiteEtc').value.trim(),
     items, startAt:t, endAt:null, status:'running',
-    pre:{phrases:readChips($('#sPre')), nrs:$('#sPreN').value, text:$('#sPreT').value.trim()},
+    pre:{phrases:readChips($('#sPre')), text:$('#sPreT').value.trim()},
     during:{phrases:[phrases('during')[0]], text:''}, post:{phrases:[], nrs:'', text:''}, emrDone:false,
   };
   S.local.lastDoctor=rec.doctor||S.local.lastDoctor; S.local.lastTherapist=rec.therapist||S.local.lastTherapist; saveLocal();
@@ -1264,11 +1265,11 @@ async function openEdit(id, date){
       ${isFixed(m) ? fixedView(m, it) : modEditor(m, it, true)}</div>`; }).join('')}</div>
     <h3>경과 (Prog. Note)</h3>
     <label class="f req"><span>치료 전</span>${chipGroup('ePre', [...new Set([...phrases('pre'), ...(r.pre?.phrases||[])])], r.pre?.phrases)}</label>
-    <div class="row">${nrsSel('ePreN', r.pre?.nrs)}<input type="text" id="ePreT" class="grow" value="${esc(r.pre?.text||'')}" placeholder="환자 호소를 구체적으로 (예: 계단 내려갈 때 우측 무릎 통증)"></div>
+    <div class="row"><input type="text" id="ePreT" class="grow" value="${esc(r.pre?.text||'')}" placeholder="환자 호소를 구체적으로 (예: 계단 내려갈 때 우측 무릎 통증)"></div>
     <label class="f"><span>치료 중</span>${chipGroup('eDur', [...new Set([...phrases('during'), ...(r.during?.phrases||[])])], r.during?.phrases)}</label>
     <input type="text" id="eDurT" value="${esc(r.during?.text||'')}" placeholder="치료 중 특이사항 (선택)">
     <label class="f req"><span>치료 후</span>${chipGroup('ePost', [...new Set([...phrases('post'), ...(r.post?.phrases||[])])], r.post?.phrases)}</label>
-    <div class="row">${nrsSel('ePostN', r.post?.nrs)}<input type="text" id="ePostT" class="grow" value="${esc(r.post?.text||'')}" placeholder="환자 표현·관찰 내용 (예: 어깨 들 때 덜 아프다고 표현함)"></div>
+    <div class="row"><input type="text" id="ePostT" class="grow" value="${esc(r.post?.text||'')}" placeholder="환자 표현·관찰 내용 (예: 어깨 들 때 덜 아프다고 표현함)"></div>
     <div id="eChecks"></div>
     <h3 class="row">EMR 기록문 <span class="grow"></span><span class="small muted" id="eOvNote">${r.emrOverride?'직접 수정됨 · ':''}</span><button type="button" class="btn sm" data-act="emrReset" ${r.emrOverride?'':'hidden'}>자동 생성으로 되돌리기</button></h3>
     <textarea id="eEmr" class="emr" spellcheck="false"></textarea>
@@ -1309,9 +1310,9 @@ function collectEdit(){
   if(r.status==='running'){ schedule(r); }
   if(r.status==='running' && r.date!==S.date && r.items.every(i=>i.end)) r.status='ended';
   if(r.status!=='running') finalizeTimes(r); else r.startAt=r.items.map(i=>i.start).filter(Boolean).sort()[0]||r.startAt;
-  r.pre={phrases:readChips($('#ePre')), nrs:$('#ePreN').value, text:$('#ePreT').value.trim()};
+  r.pre={phrases:readChips($('#ePre')), nrs:d._rec.pre?.nrs||'', text:$('#ePreT').value.trim()};
   r.during={phrases:readChips($('#eDur')), text:$('#eDurT').value.trim()};
-  r.post={phrases:readChips($('#ePost')), nrs:$('#ePostN').value, text:$('#ePostT').value.trim()};
+  r.post={phrases:readChips($('#ePost')), nrs:d._rec.post?.nrs||'', text:$('#ePostT').value.trim()};
   r.emrDone=$('#eEmrDone').checked;
   r.emrOverride = d._override ? $('#eEmr').value : '';
   return r;
