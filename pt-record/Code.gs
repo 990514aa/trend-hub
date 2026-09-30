@@ -98,13 +98,20 @@ var API_ = {
     var sh = sheet_(SHEET_PATIENTS, PAT_HEADERS);
     var n = sh.getLastRow() - 1;
     if (n < 1) return [];
-    var vals = sh.getRange(2, 1, n, 3).getValues();
+    var vals = sh.getRange(2, 1, n, 5).getValues();
     var out = [];
-    for (var i = 0; i < vals.length && out.length < 20; i++) {
+    for (var i = 0; i < vals.length; i++) {
       var reg = String(vals[i][0]), name = String(vals[i][1]);
-      if (reg.indexOf(q) === 0 || name.indexOf(q) >= 0) out.push({ regNo: reg, name: name, memo: String(vals[i][2] || '') });
+      if (reg.indexOf(q) !== 0 && name.indexOf(q) < 0) continue;
+      var plan = null; try { plan = vals[i][3] ? JSON.parse(vals[i][3]) : null; } catch (e) {}
+      out.push({ regNo: reg, name: name, memo: String(vals[i][2] || ''), updatedAt: String(vals[i][4] || ''),
+                 last: plan ? { date: plan.date, items: (plan.items || []).map(function (x) { return x.mid; }) } : null });
     }
-    return out;
+    // 등록번호 앞자리 일치 우선, 그다음 최근 방문 순
+    out.sort(function (a, b) {
+      return ((b.regNo.indexOf(q) === 0) - (a.regNo.indexOf(q) === 0)) || b.updatedAt.localeCompare(a.updatedAt);
+    });
+    return out.slice(0, 10);
   },
   getPatient: function (regNo) {
     regNo = String(regNo || '').trim();

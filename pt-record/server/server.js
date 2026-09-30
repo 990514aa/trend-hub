@@ -199,9 +199,13 @@ const API = {
     if (old) { delete recs[id]; writeJSON(recFile(m), recs); audit(id, old.regNo, '삭제', reason, by); writeCsv(m); bump(); }
     return { ok: true };
   },
+  /** 등록번호 앞자리·이름 검색 — 앞자리 일치 우선, 그다음 최근 방문 순 */
   findPatients(q) {
     q = String(q || '').trim(); if (!q) return [];
-    return Object.values(readPatients()).filter(p => String(p.regNo).startsWith(q) || String(p.name || '').includes(q)).slice(0, 20);
+    const hits = Object.values(readPatients()).filter(p => String(p.regNo).startsWith(q) || String(p.name || '').includes(q));
+    hits.sort((a, b) => (String(b.regNo).startsWith(q) - String(a.regNo).startsWith(q)) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    return hits.slice(0, 10).map(p => ({ regNo: p.regNo, name: p.name, memo: p.memo || '',
+      last: p.plan ? { date: p.plan.date, items: (p.plan.items || []).map(i => i.mid) } : null }));
   },
   getPatient(regNo) {
     regNo = String(regNo || '').trim();

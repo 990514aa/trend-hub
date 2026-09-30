@@ -125,9 +125,10 @@ input:focus,select:focus,textarea:focus{outline:2px solid #bcd0fb;border-color:v
 .warnbox ul,.errbox ul{margin:4px 0 0;padding-left:18px}
 .emr{font:13px/1.55 ui-monospace,Menlo,Consolas,"D2Coding",monospace;white-space:pre-wrap;min-height:220px}
 .ac{position:relative}
-.ac-list{position:absolute;left:0;right:0;top:100%;z-index:5;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto}
+.ac-list{position:absolute;left:0;min-width:min(420px,calc(100vw - 60px));top:100%;z-index:5;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto}
 .ac-list button{display:block;width:100%;text-align:left;border:0;background:none;padding:7px 10px}
-.ac-list button:hover{background:var(--pri-soft)}
+.ac-list button:hover,.ac-list button.on{background:var(--pri-soft)}
+.ac-list u{text-decoration:none;background:var(--gold-soft)}
 table.t{width:100%;border-collapse:collapse;background:var(--panel);font-size:14px}
 table.t th,table.t td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
 table.t th{font-size:12.5px;color:var(--muted);background:#f8fafc;position:sticky;top:0}
@@ -284,7 +285,8 @@ const MODALITIES = [
       {k:'eval', label:'[치료 후 평가]', type:'textarea', req:true},
     ],
     basis:'도수치료(비급여). 코드는 첨부 샘플(KR006) 기준이며 병원 비급여 코드로 [설정]에서 확인·변경. 실손 청구 시 시행부위·기법·목적·치료 후 평가를 매회 구체적으로 기록.' },
-  { id:'eswt', name:'체외충격파치료', en:'ESWT', code:'SZ084', coverage:'비급여', room:'ex', min:10, phase:1, enabled:true, autoStop:true, group:'eswt',
+  // solo: 비급여라 다른 치료와 한 기록으로 묶지 않고 항상 따로 기록
+  { id:'eswt', name:'체외충격파치료', en:'ESWT', code:'SZ084', coverage:'비급여', room:'ex', min:10, phase:1, enabled:true, autoStop:true, solo:true, group:'eswt',
     fields:[
       {k:'type', label:'방식', type:'select', options:['방사형(Radial)','집중형(Focused)'], def:'방사형(Radial)'},
       {k:'energy', label:'에너지', type:'text', def:'2.0bar', hint:'방사형 bar / 집중형 EFD mJ/mm²'},
@@ -312,7 +314,6 @@ const PRESETS = {
   ex:[
     {name:'도수', items:['manual']},
     {name:'충격파', items:['eswt']},
-    {name:'도수 + 충격파', items:['manual','eswt'], seq:true},
     {name:'단순운동', items:['simpleEx']},
     {name:'복합운동', items:['complexEx']},
   ],
@@ -381,7 +382,10 @@ const LocalStore = {
     this.put(db); return {record:rec};
   },
   async remove(rec, reason, by){ const db=this.db(); delete db.records[rec.id]; db.audit.push({ts:nowIso(), id:rec.id, regNo:rec.regNo, action:'삭제', changes:reason||'', by}); this.put(db); return {ok:true}; },
-  async findPatients(q){ q=q.trim(); const db=this.db(); return Object.values(db.patients).filter(p=>p.regNo.startsWith(q)||(p.name||'').includes(q)).slice(0,20); },
+  async findPatients(q){ q=q.trim(); if(!q) return []; const db=this.db();
+    const hits=Object.values(db.patients).filter(p=>p.regNo.startsWith(q)||(p.name||'').includes(q));
+    hits.sort((a,b)=>(b.regNo.startsWith(q)-a.regNo.startsWith(q)) || String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+    return hits.slice(0,10).map(p=>({regNo:p.regNo, name:p.name, memo:p.memo||'', last:p.plan?{date:p.plan.date, items:(p.plan.items||[]).map(i=>i.mid)}:null})); },
   async getPatient(regNo){ const db=this.db(); return {patient:db.patients[regNo]||null, records:Object.values(db.records).filter(r=>r.regNo===regNo && r.status!=='waiting').sort((a,b)=>(b.startAt||'').localeCompare(a.startAt||''))}; },
   async savePatient(p){ const db=this.db(); db.patients[p.regNo]={...(db.patients[p.regNo]||{}), ...p, updatedAt:nowIso()}; this.put(db); return {patient:db.patients[p.regNo]}; },
   async saveSettings(s){ const db=this.db(); db.settings=s; this.put(db); return {settings:s}; },
@@ -721,7 +725,7 @@ function bedTile(room, b){
   return `<div class="tile run" data-rid="${r.id}">
     <button class="tile-body" data-act="bedMenu" data-id="${r.id}" title="베드 메뉴">
       <span class="row"><span class="no">${room.id==='ex'?'특'+b:b}</span><span class="grow"></span>${ph.length>1?`<span class="tag">${ph.indexOf(p)+1}/${ph.length}단계</span>`:''}</span>
-      <span class="pt">${esc(r.name)}</span>
+      <span class="pt">${esc(r.name)}${r.items.some(i=>MOD(i.mid)?.coverage==='비급여')?' <span class="tag wait">비급여</span>':''}</span>
       <span class="mods">${esc(cur)}${esc(nxt)}</span>
       <span class="timer" data-timer="${r.id}">--:--</span>
       <span class="bar"><b data-bar="${r.id}" style="width:0"></b></span>
@@ -822,7 +826,7 @@ function renderLedger(){
     <tbody>${rows.map(r=>`<tr class="${r.status==='cancelled'?'cancel':''}">
       <td class="no-print"><input type="checkbox" class="sel" value="${r.id}"></td>
       <td>${hm(r.startAt)}~${r.endAt?hm(r.endAt):''}</td><td>${esc(roomName(r.room))} ${r.bed?r.bed+'번':''}</td>
-      <td>${esc(r.regNo)}</td><td>${esc(r.name)}</td><td>${esc(r.items.map(i=>`${MOD(i.mid)?.en||i.mid} ${i.start&&i.end?mins(i.start,i.end):i.min}′`).join(', '))}</td>
+      <td>${esc(r.regNo)}</td><td>${esc(r.name)}</td><td>${esc(r.items.map(i=>`${MOD(i.mid)?.en||i.mid} ${i.start&&i.end?mins(i.start,i.end):i.min}′`).join(', '))}${r.items.some(i=>MOD(i.mid)?.coverage==='비급여')?' <span class="tag wait">비급여</span>':''}</td>
       <td>${esc(r.doctor||'')}</td><td>${esc(r.therapist||'')}</td><td>${statusTag(r)}${r.cancelReason?`<div class="small muted">${esc(r.cancelReason)}</div>`:''}</td>
       <td class="no-print"><button class="btn sm" data-act="edit" data-id="${r.id}" data-date="${r.date}">열기</button></td></tr>`).join('')}</tbody>
   </table></div>` : '<div class="empty-note">기록이 없습니다.</div>'}`;
@@ -1008,6 +1012,14 @@ async function openStart(bed, waitingRec){
   d._params={}; d._touched=false;
   d._applyPreset=i=>{ d._touched=true; applyItems(PRESETS[room][i].items, null, PRESETS[room][i].seq); };
   $('#sMods').addEventListener('input', ()=>{ d._touched=true; });
+  // 따로 기록하는 항목(충격파)은 다른 항목과 함께 선택할 수 없음
+  $('#sMods').addEventListener('change', ev=>{
+    if(ev.target.dataset.on===undefined || !ev.target.checked) return;
+    const box=ev.target.closest('.mod'), solo=MOD(box.dataset.mod)?.solo;
+    const others=$$('#sMods .mod').filter(el=>el!==box && $('[data-on]',el).checked && (solo || MOD(el.dataset.mod)?.solo));
+    others.forEach(el=>{ $('[data-on]',el).checked=false; el.classList.remove('on'); });
+    if(others.length) $('#sWarn').innerHTML=`<div class="warnbox">${solo?'충격파는 비급여라 다른 치료와 따로 기록합니다 — 다른 항목을 해제했습니다.':'충격파는 따로 기록하는 항목이라 해제했습니다. 충격파는 별도로 시작하세요.'}</div>`;
+  });
   $('#sMods').addEventListener('click', ev=>{ if(ev.target.closest('[data-act]')) d._touched=true; });
   const loadPlan = async regNo => {
     if(!regNo) return;
@@ -1017,7 +1029,8 @@ async function openStart(bed, waitingRec){
     if(!$('#sName').value) $('#sName').value=p.name||'';
     if(p.plan && p.plan.room===room){
       // 응답이 늦게 왔을 때 사용자가 이미 고른 치료 조합은 덮어쓰지 않음 (강도값만 이어받음)
-      if(!d._touched) applyItems(p.plan.items.map(i=>i.mid), p.plan.items);
+      let ids=p.plan.items.map(i=>i.mid); if(ids.length>1) ids=ids.filter(id=>!MOD(id)?.solo);
+      if(!d._touched) applyItems(ids, p.plan.items);
       d._params=Object.fromEntries(p.plan.items.map(i=>[i.mid,i.params]));
       d._plan=p.plan; $('#sVisit').value=p.plan.visit||'외래';
       if(!readChips($('#sSites')).length && !$('#sSiteEtc').value){
@@ -1035,16 +1048,33 @@ async function openStart(bed, waitingRec){
   if(w.regNo) loadPlan(w.regNo);
   setTimeout(()=>{ (w.regNo?$('#sStart'):$('#sRegNo'))?.focus(); },50);
 }
+// 환자 자동완성: 한 글자부터, 등록번호 앞자리 강조 + 최근 방문일·지난 치료 표시, ↑↓ Enter 로 선택
+function acItemHtml(p, q, i){
+  const reg=String(p.regNo), hit=reg.startsWith(q)?`<u>${esc(reg.slice(0,q.length))}</u>${esc(reg.slice(q.length))}`:esc(reg);
+  const last=p.last?`${esc(String(p.last.date||'').slice(5))} · ${esc((p.last.items||[]).map(id=>MOD(id)?.en||id).join('+'))}`:'기록 없음';
+  return `<button type="button" data-i="${i}"><b>${hit}</b> ${esc(p.name||'')} <span class="small muted">최근 ${last}</span>${p.memo?` <span class="small" style="color:var(--warn)">· ${esc(p.memo)}</span>`:''}</button>`;
+}
 function bindAutocomplete(input, list, onPick){
-  let t=null;
+  let t=null, rs=[], cur=-1;
+  const show=()=>{ $$('button',list).forEach((b,i)=>b.classList.toggle('on', i===cur)); };
+  const pick=i=>{ list.hidden=true; if(rs[i]) onPick(rs[i]); };
   input.addEventListener('input', ()=>{
-    clearTimeout(t); const q=input.value.trim(); if(q.length<2){ list.hidden=true; return; }
+    clearTimeout(t); const q=input.value.trim(); if(!q){ list.hidden=true; return; }
     t=setTimeout(async ()=>{
-      let rs=[]; try{ rs=await Store.findPatients(q); }catch(e){}
+      let r=[]; try{ r=await Store.findPatients(q); }catch(e){}
       if(input.value.trim()!==q) return;
-      list.innerHTML=rs.map((p,i)=>`<button type="button" data-i="${i}">${esc(p.regNo)} ${esc(p.name||'')}</button>`).join('');
-      list.hidden=!rs.length; list.onclick=e=>{ const b=e.target.closest('button'); if(!b) return; list.hidden=true; onPick(rs[+b.dataset.i]); };
-    },250);
+      rs=r; cur=r.length?0:-1;
+      list.innerHTML=r.map((p,i)=>acItemHtml(p,q,i)).join('');
+      list.hidden=!r.length; show();
+      list.onmousedown=e=>{ const b=e.target.closest('button'); if(b){ e.preventDefault(); pick(+b.dataset.i); } };
+    },150);
+  });
+  input.addEventListener('keydown', e=>{
+    if(list.hidden || !rs.length) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); cur=(cur+1)%rs.length; show(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); cur=(cur-1+rs.length)%rs.length; show(); }
+    else if(e.key==='Enter' && cur>=0){ e.preventDefault(); e.stopPropagation(); pick(cur); }
+    else if(e.key==='Escape'){ list.hidden=true; }
   });
   input.addEventListener('blur', ()=>setTimeout(()=>list.hidden=true,200));
 }
@@ -1060,6 +1090,7 @@ async function doStart(bed, wid){
     return {mid, min:Math.max(1,parseInt($('[data-min]',el).value)||m.min), phase:+$('[data-phase]',el).value, params, start:null, end:null};
   });
   const errs=[]; if(!regNo) errs.push('등록번호'); if(!name) errs.push('이름'); if(!items.length) errs.push('치료 항목');
+  if(items.length>1 && items.some(i=>MOD(i.mid)?.solo)){ $('#sWarn').innerHTML='<div class="errbox">충격파(비급여)는 다른 치료와 따로 기록합니다. 충격파만 선택해 시작하세요.</div>'; return; }
   if(errs.length){ $('#sWarn').innerHTML=`<div class="errbox">${errs.join(', ')}을(를) 입력하세요.</div>`; return; }
   if(S.records.some(r=>r.status==='running' && r.date===S.date && r.room===S.room && +r.bed===+bed)){ $('#sWarn').innerHTML='<div class="errbox">이미 사용 중인 베드입니다.</div>'; return; }
   if(S.records.some(r=>r.status==='running' && r.regNo===regNo) && !confirm('이 환자는 다른 베드에서 치료 중입니다. 계속할까요?')) return;
@@ -1300,10 +1331,10 @@ document.addEventListener('change', async ev=>{
   if(ev.target.id==='restore' && ev.target.files[0]){ const txt=await ev.target.files[0].text(); try{ JSON.parse(txt); if(confirm('현재 기기 데이터를 백업 파일로 덮어쓸까요?')){ localStorage.setItem(DB_KEY, txt); S.version=null; refresh(true); toast('복원 완료'); } }catch(e){ toast('올바른 백업 파일이 아닙니다.'); } }
 });
 document.addEventListener('input', ev=>{
-  if(ev.target.id==='pq'){ clearTimeout(window._pqT); const q=ev.target.value.trim(); if(q.length<2){ $('#pqList').hidden=true; return; } window._pqT=setTimeout(async()=>{ try{ showPq(await Store.findPatients(q)); }catch(e){} },250); }
+  if(ev.target.id==='pq'){ clearTimeout(window._pqT); const q=ev.target.value.trim(); if(!q){ $('#pqList').hidden=true; return; } window._pqT=setTimeout(async()=>{ try{ showPq(await Store.findPatients(q), q); }catch(e){} },150); }
 });
 document.addEventListener('keydown', ev=>{ if(ev.key==='Enter' && ev.target.id==='pq') $('[data-act=pSearch]').click(); });
-function showPq(rs){ const l=$('#pqList'); if(!l) return; l.innerHTML=rs.map(p=>`<button type="button" data-reg="${esc(p.regNo)}">${esc(p.regNo)} ${esc(p.name||'')}</button>`).join(''); l.hidden=!rs.length; l.onclick=e=>{ const b=e.target.closest('button'); if(b){ l.hidden=true; loadPatientView(b.dataset.reg); } }; }
+function showPq(rs, q=''){ const l=$('#pqList'); if(!l) return; l.innerHTML=rs.map((p,i)=>acItemHtml(p,q,i).replace('data-i=', `data-reg="${esc(p.regNo)}" data-i=`)).join(''); l.hidden=!rs.length; l.onclick=e=>{ const b=e.target.closest('button'); if(b){ l.hidden=true; loadPatientView(b.dataset.reg); } }; }
 
 function openPaste(){
   openDlg(`<div class="dlg-h"><h2>접수명단 붙여넣기</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
