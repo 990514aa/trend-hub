@@ -73,7 +73,7 @@ h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
 .tile .pin:hover{border-color:#f59e0b;color:#c2410c;background:#fff7ed}
 .tile.hold{border:1.5px solid #f59e0b;background:#fff7ed;padding-bottom:5px}
 /* 끌어서 옮기기 */
-.tile.run .tile-body,[data-act=pick]{cursor:grab}
+.tile.run .tile-body,[data-act=pick],[data-drag-ended]{cursor:grab}
 body.dragging,body.dragging *{cursor:grabbing!important;user-select:none}
 body.drag-any .tile.empty,body.drag-pt .tile.empty[data-room=pt],body.drag-ex .tile.empty[data-room=ex]{outline:2px dashed #16a34a;outline-offset:-3px}
 .tile.drop-ok{outline:3px solid #16a34a!important;background:#e7f7ec!important}
@@ -162,7 +162,7 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
 .hist .hh{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .hist pre{margin:0;padding:10px 12px;font:13px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
-#toast div{background:#1f2937;color:#fff;padding:9px 16px;border-radius:9px;font-size:14px;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:auto}
+#toast div{background:#1f2937;color:#fff;padding:9px 16px;border-radius:9px;font-size:14px;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none}
 #toast div.alarm{background:var(--bad);font-weight:700;font-size:15px}
 .banner{background:var(--warn-soft);color:#8a4b00;border-bottom:1px solid #f3d9a6;padding:7px 16px;font-size:13px}
 .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:14px}
@@ -898,8 +898,8 @@ function renderBoard(){
     </div>
     <div class="panel">
       <div class="row"><h2 class="grow" style="margin:0">작성 대기 <span class="muted">${pend.length}</span></h2></div>
-      <p class="small muted" style="margin:4px 0 8px">치료가 끝나 경과 기록이 필요한 건</p>
-      <div class="list">${pend.map(r=>`<div class="item"><div class="grow"><b>${esc(r.regNo)} ${esc(r.name)}</b> ${insTag(r)} <span class="small muted">${r.bed?bedLabel(r):''}</span><div class="small muted">${r.date!==S.date?`<b style="color:var(--bad)">${r.date.slice(5)}</b> `:''}${hm(r.startAt)}~${hm(r.endAt)} · ${esc(modNames(r))}</div></div><button class="btn sm pri" data-act="edit" data-id="${r.id}" data-date="${r.date}">작성</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
+      <p class="small muted" style="margin:4px 0 8px">치료가 끝나 경과 기록이 필요한 건 · 종료를 잘못 눌렀으면 [↩ 재개] 또는 빈 베드로 끌어 놓기</p>
+      <div class="list">${pend.map(r=>`<div class="item"><div class="grow" ${r.date===S.date?`data-drag-ended="${r.id}" title="빈 베드로 끌어 놓으면 치료 재개"`:''}><b>${esc(r.regNo)} ${esc(r.name)}</b> ${insTag(r)} <span class="small muted">${r.bed?bedLabel(r):''}</span><div class="small muted">${r.date!==S.date?`<b style="color:var(--bad)">${r.date.slice(5)}</b> `:''}${hm(r.startAt)}~${hm(r.endAt)} · ${esc(modNames(r))}</div></div>${r.date===S.date?`<button class="btn sm" data-act="resume" data-id="${r.id}" title="종료를 잘못 눌렀을 때 다시 치료 중으로">↩ 재개</button>`:''}<button class="btn sm pri" data-act="edit" data-id="${r.id}" data-date="${r.date}">작성</button></div>`).join('')||'<div class="small muted">없음</div>'}</div>
     </div>
     <div class="panel">
       <div class="row"><h2 class="grow" style="margin:0">EMR 미입력 <span class="muted">${noEmr.length}</span></h2></div>
@@ -921,6 +921,28 @@ function openBedMenu(r){
     <button class="btn" data-act="edit" data-id="${r.id}">기록 보기·수정</button>
     <button class="btn" data-act="extend" data-id="${r.id}">+5분 연장</button>
     <button class="btn ok" data-act="advance" data-id="${r.id}">치료 종료</button></div>`);
+}
+/** 종료를 잘못 누른 기록(작성 대기)을 다시 치료 중으로 — bed 생략 시 원래 베드, 차 있으면 빈 베드 고르기 */
+async function resumeRec(rec, bed){
+  if(!rec || rec.status!=='ended'){ toast('작성 대기 상태인 기록만 다시 올릴 수 있습니다.'); return; }
+  if(rec.date!==S.date){ toast('오늘 치료만 다시 올릴 수 있습니다. 지난 기록은 [작성]에서 시각을 고치세요.'); return; }
+  const free=freeBeds(rec.room);
+  if(bed==null){
+    if(free.includes(+rec.bed)) bed=+rec.bed;
+    else {
+      openDlg(`<div class="dlg-h"><h2>${esc(rec.regNo)} ${esc(rec.name)} — 치료 재개</h2><span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
+      <div class="dlg-b"><p class="small muted" style="margin:0">원래 ${bedLabel(rec)}번 베드는 지금 사용 중입니다. 다시 올릴 빈 베드를 고르세요.</p>
+      <div class="chips">${free.map(b=>`<button type="button" class="chip" data-act="resumeTo" data-id="${rec.id}" data-bed="${b}">${rec.room==='ex'?'특'+b:b+'번'}</button>`).join('')||'<span class="small muted">빈 베드 없음</span>'}</div></div>`);
+      return;
+    }
+  }
+  if(!free.includes(+bed)){ toast('⛔ 이미 사용 중인 베드입니다.', 'alarm'); return; }
+  const r=withBase(rec);
+  r.items = rec.resume?.items ? clone(rec.resume.items) : r.items.map(i=>({...i, end:null}));
+  delete r.resume; r.status='running'; r.endAt=null; r.bed=+bed;
+  schedule(r); r.startAt=r.items.map(i=>i.start).filter(Boolean).sort()[0]||r.startAt;
+  closeDlg(); await saveRecord(r);
+  toast(`↩ ${bedLabel(r)} 베드 ${r.name} 치료를 다시 진행합니다.`);
 }
 /** 같은 치료실의 빈 베드(치료 중·준비 중 아닌) */
 function freeBeds(roomId){
@@ -1384,7 +1406,7 @@ async function openEdit(id, date){
     <details class="small"><summary>수정 이력</summary><div id="eAudit" class="muted">불러오는 중…</div></details>
   </div>
   <div class="dlg-f">
-    ${r.status!=='cancelled'?`<button class="btn bad" data-act="cancelRec">기록 취소</button>`:''}<span class="grow"></span>
+    ${r.status!=='cancelled'?`<button class="btn bad" data-act="cancelRec">기록 취소</button>`:''}${r.status==='ended'&&r.date===S.date?`<button class="btn" data-act="resume" data-id="${r.id}" title="종료를 잘못 눌렀을 때">↩ 치료 재개</button>`:''}<span class="grow"></span>
     <button class="btn" data-act="copyEmr">기록문 복사</button>
     <button class="btn" data-act="saveDraft">임시 저장</button>
     ${r.status==='running'&&r.date===S.date?'':`<button class="btn ok" data-act="saveDone">작성 완료 + 복사</button>`}
@@ -1448,7 +1470,7 @@ async function saveEdit(done){
     if(!ok){ if(err.length) $('#eChecks').scrollIntoView({behavior:'smooth'}); return; }
     if(err.length) r.incomplete = err; else delete r.incomplete;
   }
-  if(done){ r.status='done'; await copyText(emrOf(r)); }
+  if(done){ r.status='done'; delete r.resume; await copyText(emrOf(r)); }
   else if(r.status==='done' && checkRecord(r,true).err.length) r.status='ended';
   r._base=$('#dlg')._rec._base;
   const saved = await saveRecord(r);
@@ -1488,6 +1510,7 @@ let drag=null, suppressClick=false;
 function dragInfo(){
   if(!drag) return null;
   if(drag.kind==='rec'){ const r=S.records.find(x=>x.id===drag.id); return r&&r.status==='running'?{label:`${bedLabel(r)} ${r.name}`, room:r.room, rec:r}:null; }
+  if(drag.kind==='ended'){ const r=S.records.find(x=>x.id===drag.id); return r&&r.status==='ended'&&r.date===S.date?{label:`↩ ${r.name}`, room:r.room, rec:r}:null; }
   const w=S.records.find(x=>x.id===drag.id); return w&&w.status==='waiting'?{label:w.name, room:null, rec:w}:null;
 }
 function dropCheck(tile, info){
@@ -1495,8 +1518,8 @@ function dropCheck(tile, info){
   const room=tile.dataset.room, bed=+tile.dataset.bed, no=room==='ex'?`특수 ${bed}번`:`${bed}번`;
   if(drag.kind==='rec' && tile.dataset.rid===drag.id) return {ok:false, silent:true};
   if(info.room && room!==info.room) return {ok:false, msg:'다른 치료실 베드로는 옮길 수 없습니다.'};
-  if(tile.classList.contains('run')) return {ok:false, msg:`${no} 베드는 치료 중이라 ${drag.kind==='rec'?'이동':'배정'}할 수 없습니다.`};
-  if(tile.classList.contains('hold')) return {ok:false, msg:`${no} 베드는 다른 분이 준비 중(찜)이라 ${drag.kind==='rec'?'이동':'배정'}할 수 없습니다.`};
+  if(tile.classList.contains('run')) return {ok:false, msg:`${no} 베드는 치료 중이라 ${drag.kind!=='wait'?'이동':'배정'}할 수 없습니다.`};
+  if(tile.classList.contains('hold')) return {ok:false, msg:`${no} 베드는 다른 분이 준비 중(찜)이라 ${drag.kind!=='wait'?'이동':'배정'}할 수 없습니다.`};
   if(tile.classList.contains('empty')) return {ok:true, room, bed};
   return null;
 }
@@ -1515,8 +1538,10 @@ function dragEnd(){
 }
 document.addEventListener('pointerdown', ev=>{
   if(ev.button!==0 || S.tab!=='board') return;
-  const t=ev.target.closest('.tile.run[data-rid] .tile-body'), w=ev.target.closest('[data-act=pick]');
-  if(!t && !w) return;
+  const t=ev.target.closest('.tile.run[data-rid] .tile-body'), w=ev.target.closest('[data-act=pick]'), en=ev.target.closest('[data-drag-ended]');
+  if(!t && !w && !en) return;
+  if(en){ drag={kind:'ended', id:en.dataset.dragEnded, x:ev.clientX, y:ev.clientY, on:false, touch:ev.pointerType!=='mouse', src:en.closest('.item')};
+    if(drag.touch) drag.timer=setTimeout(()=>{ if(drag && !drag.on){ drag.armed=true; dragStartVisual(); } }, 300); return; }
   drag={kind:t?'rec':'wait', id:t?t.closest('.tile').dataset.rid:w.dataset.id, x:ev.clientX, y:ev.clientY, on:false, touch:ev.pointerType!=='mouse', src:t?t.closest('.tile'):w.closest('.item')};
   if(drag.touch) drag.timer=setTimeout(()=>{ if(drag && !drag.on){ drag.armed=true; dragStartVisual(); } }, 300);
 });
@@ -1545,6 +1570,7 @@ document.addEventListener('pointerup', async ev=>{
   dragEnd();
   if(!c || c.silent) return;
   if(!c.ok){ toast('⛔ '+c.msg, 'alarm', 3500); return; }
+  if(kind==='ended'){ await resumeRec(info.rec, c.bed); return; }
   if(kind==='rec'){
     if(!freeBeds(c.room).includes(c.bed)){ toast('⛔ 방금 다른 기기에서 사용하기 시작한 베드입니다.', 'alarm'); return; }
     const r=withBase(info.rec); const from=bedLabel(r); r.bed=c.bed; await saveRecord(r); toast(`${from} → ${bedLabel(r)} 베드로 옮겼습니다.`);
@@ -1565,6 +1591,8 @@ document.addEventListener('click', async ev=>{
     case 'close': closeDlg(); break;
     case 'room': S.room=a.dataset.room; S.local.room=S.room; saveLocal(); render(); break;
     case 'bedMenu': if(rec) openBedMenu(rec); break;
+    case 'resume': resumeRec(rec); break;
+    case 'resumeTo': resumeRec(rec, +a.dataset.bed); break;
     case 'moveBed': {
       const nb=+a.dataset.bed; if(!freeBeds(rec.room).includes(nb)){ toast('이미 사용 중인 베드입니다.'); break; }
       const r=withBase(rec); const from=bedLabel(r); r.bed=nb; closeDlg(); await saveRecord(r); toast(`${from} → ${bedLabel(r)} 베드로 옮겼습니다.`); break; }
@@ -1627,7 +1655,8 @@ document.addEventListener('click', async ev=>{
     case 'plus': case 'minus': { const inp=$('[data-min]',a.closest('.mod')); inp.value=Math.max(1,(parseInt(inp.value)||0)+(act==='plus'?5:-5)); break; }
     case 'doStart': doStart(+a.dataset.bed, a.dataset.wid); break;
     case 'advance': {
-      const r=withBase(rec); const dropped=finishRec(r, nowIso());
+      const r=withBase(rec); const before=clone(r.items); const dropped=finishRec(r, nowIso());
+      r.resume={items:before};   // 종료를 잘못 눌렀을 때 [치료 재개]로 되돌리기용
       if(!r.items.length){ toast('시작한 치료가 없어 종료할 수 없습니다. [치료 취소]를 사용하세요.'); break; }
       await saveRecord(r);
       toast(`${bedLabel(r)} 베드 종료 — 경과 기록을 작성하세요.${dropped.length?` (시작 전이던 ${dropped.join('·')} 제외)`:''}`, '', 6000); openEdit(r.id);
