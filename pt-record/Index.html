@@ -1536,10 +1536,14 @@ async function openEdit(id, date){
   if(!r){ const rows=await run(Store.listRange(date,date),'불러오는 중…'); r=rows.find(x=>x.id===id); }
   if(!r) return toast('기록을 찾을 수 없습니다.');
   if(r.status!=='done') r=fillFixed(clone(r));
+  // 지난 날 [종료]를 안 누른 기록: 예정 종료 시각(시작+설정 시간)으로 채워 두고 확인·수정하게 함
+  let staleNote='';
+  if(r.status==='running' && r.date!==S.date){ schedule(r); const lp=lastPhase(r), pe=phaseEnd(r,lp); if(pe!=null){ finishRec(r, new Date(pe).toISOString()); staleNote='지난 날 [종료]를 누르지 않은 기록입니다. 종료 시각을 예정 시각(시작 + 설정 시간)으로 채웠습니다 — 실제와 다르면 고친 뒤 저장하세요.'; } }
   const e=withBase(r);
   const d=openDlg(`
   <div class="dlg-h"><h2>치료 기록 — ${esc(r.regNo)} ${esc(r.name)}</h2>${statusTag(r)}<span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
   <div class="dlg-b" id="eBody">
+    ${staleNote?`<div class="warnbox">${staleNote}</div>`:''}
     <div class="grid2">
       <label class="f req"><span>등록번호</span><input type="text" id="eRegNo" value="${esc(r.regNo)}"></label>
       <label class="f req"><span>이름</span><input type="text" id="eName" value="${esc(r.name)}"></label>
