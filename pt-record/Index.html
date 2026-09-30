@@ -95,7 +95,8 @@ h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
 .tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:#eef1f5;color:var(--muted)}
 .tag.run{background:var(--pri-soft);color:var(--pri)} .tag.wait{background:var(--warn-soft);color:var(--warn)}
 .tag.done{background:var(--ok-soft);color:var(--ok)} .tag.cancel{background:var(--bad-soft);color:var(--bad)}
-.tag.emr{background:#e9e4ff;color:#5b3fd6}
+.tag.emrok{background:#e9e4ff;color:#5b3fd6}
+.tag{white-space:nowrap}
 /* forms */
 dialog{border:0;border-radius:14px;padding:0;width:min(880px,calc(100vw - 20px));max-height:calc(100vh - 20px);box-shadow:0 20px 60px rgba(0,0,0,.25)}
 dialog.cfm{width:min(480px,calc(100vw - 24px))}
@@ -194,7 +195,7 @@ const MODALITIES = [
       {k:'carrier', label:'반송주파수', type:'select', options:['4,000Hz','2,000Hz','5,000Hz'], def:'4,000Hz'},
       {k:'amf', label:'비트주파수(AMF)', type:'text', def:'80~150Hz'},
       {k:'sweep', label:'Sweep', type:'select', options:['Sweep 적용','Sweep 미적용'], def:'Sweep 적용'},
-      {k:'ma', label:'강도(mA)', type:'number', unit:'mA', req:true, hint:'장비 표시값'},
+      {k:'ma', label:'강도(mA)', type:'text', unit:'mA', def:'10~20', hint:'감각역치 수준'},
       {k:'sense', label:'감각 수준', type:'select', options:['감각역치 수준의 편안한 저림감','운동역치(근수축 관찰)'], def:'감각역치 수준의 편안한 저림감'},
     ],
     tpl:'{electrode}, 반송주파수 {carrier}, AMF {amf}, {sweep}, 강도 {ma}mA({sense})',
@@ -219,10 +220,10 @@ const MODALITIES = [
   { id:'laser', name:'재활저출력레이저치료', en:'LLLT', code:'MM085', coverage:'급여', room:'pt', min:5, phase:2, enabled:true, autoStop:true, group:'laser',
     fields:[
       {k:'wave', label:'파장', type:'text', def:'830nm', hint:'장비 사양'},
-      {k:'power', label:'출력(mW)', type:'number', unit:'mW', req:true},
+      {k:'power', label:'출력(mW)', type:'number', unit:'mW', def:'100'},
       {k:'method', label:'조사 방식', type:'select', options:['접촉식 Point 조사','비접촉 스캔 조사'], def:'접촉식 Point 조사'},
       {k:'points', label:'조사 포인트 수', type:'number', unit:'pt'},
-      {k:'dose', label:'조사량(J/cm²)', type:'text'},
+      {k:'dose', label:'조사량(J/cm²)', type:'text', def:'4'},
       {k:'eye', label:'안전', type:'select', options:['보안경 착용 확인'], def:'보안경 착용 확인'},
     ],
     tpl:'파장 {wave}, 출력 {power}mW, {method}, {points}포인트, 조사량 {dose}J/cm², {eye}',
@@ -231,14 +232,14 @@ const MODALITIES = [
     fields:[
       {k:'freq', label:'주파수', type:'text', def:'80~100Hz(Conventional)'},
       {k:'pulse', label:'펄스폭(µs)', type:'number', unit:'µs', def:'100'},
-      {k:'ma', label:'강도(mA)', type:'number', unit:'mA', req:true},
+      {k:'ma', label:'강도(mA)', type:'text', unit:'mA', def:'10~20'},
     ],
     tpl:'2채널 패드, {freq}, 펄스폭 {pulse}µs, 강도 {ma}mA(감각역치 수준)',
     basis:'경피적전기신경자극치료(MM070). 외래 1일 1회(입원 1일 2회). 심층열치료와 같은 목적으로 병행하면 외래는 중복진료로 봄.' },
   { id:'tractC', name:'간헐적견인치료-경추견인', en:'C-traction', code:'MM051', coverage:'급여', room:'pt', min:15, phase:1, enabled:true, autoStop:true, group:'traction',
     fields:[
-      {k:'hold', label:'Hold 중량(kg)', type:'number', unit:'kg', req:true, hint:'시작 참고: 체중의 약 7~10%'},
-      {k:'rest', label:'Rest 중량(kg)', type:'number', unit:'kg'},
+      {k:'hold', label:'Hold 중량(kg)', type:'number', unit:'kg', def:'5', hint:'첨부 샘플 기준 · 참고: 체중의 약 7~10%'},
+      {k:'rest', label:'Rest 중량(kg)', type:'number', unit:'kg', def:'0.5'},
       {k:'holdSec', label:'Hold(sec)', type:'number', unit:'sec', def:'15'},
       {k:'restSec', label:'Rest(sec)', type:'number', unit:'sec', def:'10'},
       {k:'pos', label:'자세', type:'select', options:['Supine','Sitting'], def:'Supine'},
@@ -248,8 +249,8 @@ const MODALITIES = [
     basis:'간헐적견인치료-경추견인(MM051): 재활의학과·정형외과·신경외과·신경과·외과·흉부외과·마취통증의학과·성형외과 전문의가 상근하고, 그 전문의(또는 전공의)의 지시에 따라 시행.' },
   { id:'tractL', name:'간헐적견인치료-골반견인', en:'Pelvic traction', code:'MM052', coverage:'급여', room:'pt', min:15, phase:1, enabled:true, autoStop:true, group:'traction',
     fields:[
-      {k:'hold', label:'Hold 중량(kg)', type:'number', unit:'kg', req:true, hint:'시작 참고: 체중의 약 25%'},
-      {k:'rest', label:'Rest 중량(kg)', type:'number', unit:'kg'},
+      {k:'hold', label:'Hold 중량(kg)', type:'number', unit:'kg', def:'18', hint:'첨부 샘플 기준 · 참고: 체중의 약 25%'},
+      {k:'rest', label:'Rest 중량(kg)', type:'number', unit:'kg', def:'2'},
       {k:'holdSec', label:'Hold(sec)', type:'number', unit:'sec', def:'20'},
       {k:'restSec', label:'Rest(sec)', type:'number', unit:'sec', def:'10'},
       {k:'pos', label:'자세', type:'select', options:['Supine(Hip·Knee 90/90)','Prone'], def:'Supine(Hip·Knee 90/90)'},
@@ -286,7 +287,7 @@ const MODALITIES = [
   { id:'eswt', name:'체외충격파치료', en:'ESWT', code:'SZ084', coverage:'비급여', room:'ex', min:10, phase:1, enabled:true, autoStop:true, group:'eswt',
     fields:[
       {k:'type', label:'방식', type:'select', options:['방사형(Radial)','집중형(Focused)'], def:'방사형(Radial)'},
-      {k:'energy', label:'에너지', type:'text', req:true, hint:'예: 2.0bar / EFD 0.10mJ/mm²'},
+      {k:'energy', label:'에너지', type:'text', def:'2.0bar', hint:'방사형 bar / 집중형 EFD mJ/mm²'},
       {k:'shots', label:'충격 횟수', type:'number', unit:'shots', def:'2000', req:true},
       {k:'freq', label:'주파수(Hz)', type:'number', unit:'Hz', def:'10'},
       {k:'target', label:'적용 부위 상세', type:'text', def:'압통점(Trigger point) 위주'},
@@ -506,6 +507,13 @@ function finalizeTimes(r){
 }
 
 /* ===================== 기록문(EMR) 생성 ===================== */
+// 강도·조건은 기본 권고값으로 고정 기록 (운동·도수의 서술형 항목만 직접 작성)
+const isFixed = m => !!m && !m.format;
+function paramsOf(it){
+  const m=MOD(it.mid); const p={...(it.params||{})};
+  for(const f of (m&&m.fields)||[]){ const v=p[f.k]; if((v==null||v===''||(Array.isArray(v)&&!v.length)) && f.def!=null) p[f.k]=f.def; }
+  return p;
+}
 function fillTpl(tpl, params){
   // 값이 빈 항목이 들어간 구절은 통째로 뺀다
   return tpl.split(/,\s*/).filter(part => !(part.match(/\{(\w+)\}/g)||[]).some(m => { const v=params[m.slice(1,-1)]; return v==null || v==='' || (Array.isArray(v)&&!v.length); }))
@@ -525,7 +533,7 @@ function genEmr(r){
   if(st) L.push(`치료시간: ${hm(st)} ~ ${en?hm(en):'진행 중'}${en?` (총 ${mins(st,en)}분${ph.length>1?', 순차 시행':r.items.length>1?', 동시 시행':''})`:''}`);
   L.push('Tx(치료방법·조건):');
   r.items.forEach((it,idx) => {
-    const m=MOD(it.mid)||{name:it.mid, fields:[]}; const p=it.params||{};
+    const m=MOD(it.mid)||{name:it.mid, fields:[]}; const p=paramsOf(it);
     const time = it.start ? `${hm(it.start)}~${it.end?hm(it.end):''}${it.end?` (${mins(it.start,it.end)}분)`:''}` : '';
     L.push(` ${idx+1}) ${m.name}${m.en?` ${m.en}`:''}${sc&&m.code?` [${m.code}]`:''}${m.coverage==='비급여'?' (비급여)':''}  ${time}`);
     if(m.format==='soap'){
@@ -584,7 +592,7 @@ function checkRecord(r, strict){
     if(m.minReq && (actual ?? it.min) < m.minReq) warn.push(`${m.name}: ${m.minReq}분 이상 실시해야 산정됩니다. (현재 ${actual ?? it.min}분)`);
     if(actual!=null && actual < it.min-2 && !m.autoStop) warn.push(`${m.name}: 실제 ${actual}분 — 설정 ${it.min}분보다 짧습니다. 사유가 있으면 경과에 기록하세요.`);
     if(strict){
-      for(const f of m.fields||[]) if(f.req){ const v=it.params?.[f.k]; if(v==null||v===''||(Array.isArray(v)&&!v.length)) err.push(`${m.name}: '${f.label}' 입력 필요`); }
+      for(const f of m.fields||[]) if(f.req){ const v=paramsOf(it)[f.k]; if(v==null||v===''||(Array.isArray(v)&&!v.length)) err.push(`${m.name}: '${f.label}' 입력 필요`); }
       if(!it.end) err.push(`${m.name}: 종료 시각이 없습니다.`);
     }
   }
@@ -695,7 +703,7 @@ function render(){
 function statusTag(r){
   const map={running:['run','치료 중'],ended:['wait','작성 대기'],done:['done','작성 완료'],cancelled:['cancel','취소'],waiting:['','대기']};
   const [c,t]=map[r.status]||['',r.status];
-  return `<span class="tag ${c}">${t}</span>${r.status==='done'&&r.incomplete?.length?` <span class="tag cancel" title="${esc(r.incomplete.join(' / '))}">미비 ${r.incomplete.length}</span>`:''}${r.status==='done'&&r.emrDone?' <span class="tag emr">EMR✓</span>':''}`;
+  return `<span class="tag ${c}">${t}</span>${r.status==='done'&&r.incomplete?.length?` <span class="tag cancel" title="${esc(r.incomplete.join(' / '))}">미비 ${r.incomplete.length}</span>`:''}${r.status==='done'&&r.emrDone?' <span class="tag emrok">EMR✓</span>':''}`;
 }
 const modNames = r => r.items.map(i=>MOD(i.mid)?.en||MOD(i.mid)?.name||i.mid).join(' + ');
 
@@ -846,7 +854,7 @@ function renderGuide(){
   return `
   <div class="panel">
     <h2>치료 항목별 코드 · 산정기준 · 강도 기록 항목</h2>
-    <p class="small muted">근거: 건강보험 행위 급여목록 제7장 이학요법료 및 심사기준(심평원), 첨부 「물리치료 기록 작성 샘플」. 강도 기본값은 일반적 임상 적용 범위이며 <b>실제 처방·장비 설정값으로 기록</b>해야 합니다. 수가·기준은 개정될 수 있으므로 심평원 최신 고시로 주기적으로 확인하세요.</p>
+    <p class="small muted">근거: 건강보험 행위 급여목록 제7장 이학요법료 및 심사기준(심평원), 첨부 「물리치료 기록 작성 샘플」. 강도·조건은 <b>기본 권고값으로 고정 기록</b>됩니다(괄호 안 값). 병원 장비 설정이 다르면 기본값 변경을 요청하세요. 수가·기준은 개정될 수 있으므로 심평원 최신 고시로 주기적으로 확인하세요.</p>
     <div class="tablewrap"><table class="t">
       <thead><tr><th>항목</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간</th><th>기록하는 강도·조건</th><th>산정·기록 기준</th></tr></thead>
       <tbody>${mods().map(m=>`<tr style="${m.enabled?'':'opacity:.55'}"><td><b>${esc(m.name)}</b><div class="small muted">${esc(m.en)}${m.enabled?'':' · 사용 안 함'}</div></td><td style="white-space:nowrap">${esc(m.code)}</td><td style="white-space:nowrap">${esc(m.coverage)}</td><td style="white-space:nowrap">${esc(roomName(m.room))}</td><td style="white-space:nowrap">${m.min}분</td>
@@ -948,6 +956,11 @@ function modEditor(m, it, withTime){
     ${withTime && it?.start ? `<label class="f"><span>시작</span><input type="time" data-t="start" data-mid="${m.id}" value="${hm(it.start)}"></label><label class="f"><span>종료</span><input type="time" data-t="end" data-mid="${m.id}" value="${it.end?hm(it.end):''}"></label>`:''}
   </div>`;
 }
+// 고정 조건 항목: 적용 조건은 보여주기만, 시간만 필요 시 수정
+function fixedView(m, it){
+  return `<div class="small" style="margin-top:4px;color:var(--muted)">${esc(fillTpl(m.tpl||'', paramsOf(it)))}</div>
+    ${it.start?`<div class="row small" style="margin-top:6px"><span class="muted">시간</span><input type="time" data-t="start" data-mid="${m.id}" value="${hm(it.start)}" style="width:auto"> ~ <input type="time" data-t="end" data-mid="${m.id}" value="${it.end?hm(it.end):''}" style="width:auto"></div>`:''}`;
+}
 function chipGroup(id, list, sel){ return `<div class="chips" id="${id}" data-multi="1">${list.map(o=>`<button type="button" class="chip ${(sel||[]).includes(o)?'on':''}" data-chip>${esc(o)}</button>`).join('')}</div>`; }
 function selectOpts(list, v, ph){ if(!v && list.length===1) v=list[0]; const L=[...list]; if(v && !L.includes(v)) L.unshift(v); return `<option value="">${ph||'선택'}</option>`+L.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join(''); }
 const readChips = el => el ? $$('.chip.on', el).map(b=>b.textContent) : [];
@@ -976,6 +989,10 @@ async function openStart(bed, waitingRec){
     <div class="grid2">
       <label class="f"><span>처방의</span><select id="sDoctor">${selectOpts(S.settings.doctors, S.local.lastDoctor)}</select></label>
       <label class="f"><span>시행자</span><select id="sTher">${selectOpts(S.settings.therapists, S.local.lastTherapist)}</select></label>
+      <div style="grid-column:1/-1"><div class="f req" style="font-size:13px;color:var(--muted);font-weight:600"><span>치료 부위</span></div>
+        <div class="row" style="margin:4px 0"><div class="seg" id="sSide">${['Rt.','Lt.','Both',''].map(o=>`<button type="button" data-side="${o}" class="${o===''?'on':''}">${o||'좌우 없음'}</button>`).join('')}</div>
+        <input type="text" id="sSiteEtc" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
+        ${chipGroup('sSites', S.settings.sites, [])}</div>
       <label class="f" style="grid-column:1/-1"><span>치료 전 상태 (지금 입력하거나 종료 후 입력)</span>${chipGroup('sPre', phrases('pre'), [])}</label>
       <div class="row">${nrsSel('sPreN','')}<input type="text" id="sPreT" placeholder="환자 호소 (예: 좌측 어깨 들어올릴 때 통증)" class="grow"></div>
     </div>
@@ -1003,6 +1020,12 @@ async function openStart(bed, waitingRec){
       if(!d._touched) applyItems(p.plan.items.map(i=>i.mid), p.plan.items);
       d._params=Object.fromEntries(p.plan.items.map(i=>[i.mid,i.params]));
       d._plan=p.plan; $('#sVisit').value=p.plan.visit||'외래';
+      if(!readChips($('#sSites')).length && !$('#sSiteEtc').value){
+        const known=new Set(S.settings.sites);
+        $$('#sSites .chip').forEach(c=>c.classList.toggle('on', (p.plan.sites||[]).includes(c.textContent)));
+        const extra=(p.plan.sites||[]).filter(x=>!known.has(x)); if(extra.length) $('#sSiteEtc').value=extra.join(', ');
+        $$('#sSide [data-side]').forEach(b=>b.classList.toggle('on', b.dataset.side===(p.plan.side||'')));
+      }
       if(p.plan.doctor && !$('#sDoctor').value) $('#sDoctor').innerHTML=selectOpts(S.settings.doctors, p.plan.doctor);
       $('#sPlanNote').innerHTML=`✓ 지난 처방 불러옴 (${esc(p.plan.date)}: ${esc(p.plan.items.map(i=>MOD(i.mid)?.en).join(' + '))}${p.plan.sites?.length?' · '+esc([p.plan.side,p.plan.sites.join(', ')].filter(Boolean).join(' ')):''})${p.memo?` · <b>메모: ${esc(p.memo)}</b>`:''}`;
     } else $('#sPlanNote').innerHTML=p.memo?`<b>메모: ${esc(p.memo)}</b>`:'';
@@ -1030,7 +1053,8 @@ async function doStart(bed, wid){
   const regNo=$('#sRegNo').value.trim(), name=$('#sName').value.trim();
   const items=$$('#sMods .mod').filter(el=>$('[data-on]',el).checked).map(el=>{
     const mid=el.dataset.mod, m=MOD(mid);
-    const params = Object.assign(Object.fromEntries((m.fields||[]).filter(f=>f.def!=null).map(f=>[f.k,f.def])), d._params[mid]||{});
+    const defs = Object.fromEntries((m.fields||[]).filter(f=>f.def!=null).map(f=>[f.k,f.def]));
+    const params = isFixed(m) ? defs : Object.assign(defs, d._params[mid]||{});
     // 서술형(S·O·A·P, 평가)은 매번 새로 쓰도록 이전 값을 가져오지 않음
     for(const f of m.fields||[]) if(f.type==='textarea') delete params[f.k];
     return {mid, min:Math.max(1,parseInt($('[data-min]',el).value)||m.min), phase:+$('[data-phase]',el).value, params, start:null, end:null};
@@ -1047,7 +1071,7 @@ async function doStart(bed, wid){
     ...(base?withBase(base):{id:uid(), createdAt:nowIso()}),
     date:S.date, regNo, name, visit:$('#sVisit').value, room:S.room, bed:+bed,
     doctor:$('#sDoctor').value, therapist:$('#sTher').value,
-    dx:plan.dx||'', sites:plan.sites||[], side:plan.side||'', siteEtc:'',
+    dx:plan.dx||'', sites:readChips($('#sSites')), side:$('#sSide .on')?.dataset.side||'', siteEtc:$('#sSiteEtc').value.trim(),
     items, startAt:t, endAt:null, status:'running',
     pre:{phrases:readChips($('#sPre')), nrs:$('#sPreN').value, text:$('#sPreT').value.trim()},
     during:{phrases:[phrases('during')[0]], text:''}, post:{phrases:[], nrs:'', text:''}, emrDone:false,
@@ -1076,14 +1100,14 @@ async function openEdit(id, date){
       <label class="f req"><span>시행자</span><select id="eTher">${selectOpts(S.settings.therapists, r.therapist)}</select></label>
       <label class="f" style="grid-column:1/-1"><span>Dx (상병)</span><input type="text" id="eDx" value="${esc(r.dx||'')}" placeholder="예: M75.1 회전근개 증후군"></label>
     </div>
-    <div><div class="f req" style="font-size:13px;color:var(--muted);font-weight:600"><span>치료 부위</span></div>
+    <details ${siteText(r)?'':'open'}><summary style="cursor:pointer"><span class="muted small" style="font-weight:600">치료 부위</span> <b>${esc(siteText(r)||'(시작 때 선택 안 함 — 여기서 선택)')}</b> <span class="small muted">· 바꾸려면 누르기</span></summary>
       <div class="row" style="margin:4px 0"><div class="seg" id="eSide">${['Rt.','Lt.','Both',''].map(o=>`<button type="button" data-side="${o}" class="${(r.side||'')===o?'on':''}">${o||'좌우 없음'}</button>`).join('')}</div>
       <input type="text" id="eSiteEtc" value="${esc(r.siteEtc||'')}" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
-      ${chipGroup('eSites', [...new Set([...S.settings.sites, ...(r.sites||[])])], r.sites)}</div>
-    <h3>치료 항목 · 시간 · 강도 조건</h3>
+      ${chipGroup('eSites', [...new Set([...S.settings.sites, ...(r.sites||[])])], r.sites)}</details>
+    <h3>치료 항목 · 시간</h3>
     <div class="list">${r.items.map(it=>{ const m=MOD(it.mid)||{id:it.mid,name:it.mid,fields:[]}; return `<div class="mod on" data-emod="${it.mid}">
       <div class="mod-h"><span class="nm">${esc(m.name)}</span><span class="muted small">${esc(m.en||'')} · ${esc(m.code||'')} · 설정 ${it.min}분${it.start&&it.end?` · 실제 ${mins(it.start,it.end)}분`:''}</span></div>
-      ${modEditor(m, it, true)}</div>`; }).join('')}</div>
+      ${isFixed(m) ? fixedView(m, it) : modEditor(m, it, true)}</div>`; }).join('')}</div>
     <h3>경과 (Prog. Note)</h3>
     <label class="f req"><span>치료 전</span>${chipGroup('ePre', [...new Set([...phrases('pre'), ...(r.pre?.phrases||[])])], r.pre?.phrases)}</label>
     <div class="row">${nrsSel('ePreN', r.pre?.nrs)}<input type="text" id="ePreT" class="grow" value="${esc(r.pre?.text||'')}" placeholder="환자 호소를 구체적으로 (예: 계단 내려갈 때 우측 무릎 통증)"></div>
@@ -1195,7 +1219,7 @@ function shiftDate(s, n){ const d=new Date(s+'T00:00:00'); d.setDate(d.getDate()
 document.addEventListener('pointerdown', unlockAudio, {capture:true});
 document.addEventListener('click', async ev=>{
   const chip=ev.target.closest('[data-chip]'); if(chip){ chip.classList.toggle('on'); const d=$('#dlg'); if(d._upd) d._upd(); return; }
-  const side=ev.target.closest('[data-side]'); if(side){ $$('[data-side]').forEach(b=>b.classList.toggle('on',b===side)); $('#dlg')._upd?.(); return; }
+  const side=ev.target.closest('[data-side]'); if(side){ $$('[data-side]', side.parentElement).forEach(b=>b.classList.toggle('on',b===side)); $('#dlg')._upd?.(); return; }
   const t=ev.target.closest('[data-tab]'); if(t){ S.tab=t.dataset.tab; if(S.tab==='ledger'&&S.ledgerDate!==S.date) loadLedger(); render(); return; }
   const a=ev.target.closest('[data-act]'); if(!a) return;
   const act=a.dataset.act, id=a.dataset.id;
