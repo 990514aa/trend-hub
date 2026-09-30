@@ -87,7 +87,7 @@ body.drag-any .tile.empty,body.drag-pt .tile.empty[data-room=pt],body.drag-ex .t
 .tile-body{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:5px 7px 3px;flex:1;min-width:0}
 .tile-body .row{gap:4px}
 .tile .pt{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile .mods{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .mods{font-size:11.5px;color:var(--muted);white-space:normal;overflow:hidden;max-height:3.4em;line-height:1.6}
 .tile .timer{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;white-space:nowrap}
 .tile.soon .timer{color:var(--warn)} .tile.over .timer{color:var(--bad);font-size:16px}
 .bar{display:block;height:5px;background:#e6ebf2;border-radius:3px;overflow:hidden;margin-top:2px}
@@ -107,6 +107,15 @@ body.drag-any .tile.empty,body.drag-pt .tile.empty[data-room=pt],body.drag-ex .t
 .tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:#eef1f5;color:var(--muted)}
 .tag.run{background:var(--pri-soft);color:var(--pri)} .tag.wait{background:var(--warn-soft);color:var(--warn)}
 .tag.done{background:var(--ok-soft);color:var(--ok)} .tag.cancel{background:var(--bad-soft);color:var(--bad)}
+.mp{display:inline-block;border:1px solid;border-radius:6px;padding:0 5px;font-size:11.5px;font-weight:700;line-height:1.5;margin:1px 1px 1px 0}
+.mp.dim{opacity:.55}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:2px;vertical-align:0}
+.dots{margin-right:5px;white-space:nowrap}
+.tile.run{background:var(--tint,#fff)!important;border-color:var(--tbd,#9db8f5)!important}
+.tile.run.soon{background:var(--warn-soft)!important;border-color:var(--warn)!important}
+.tile.run.over{background:var(--bad-soft)!important;border-color:var(--bad)!important}
+.mod{border-left:5px solid var(--mbd,var(--line))!important}
+.mod.on{background:var(--mbg,#f5f8ff)!important}
 .tag.ins-ta{background:#ffe3e3;color:#b42318;font-weight:800}
 .tag.ins-etc{background:#e8f1ff;color:#1d4ed8}
 .tag.hold{background:#ffedd5;color:#c2410c}
@@ -193,6 +202,14 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
  * ===================================================================== */
 const POS = ['Prone','Supine','Sitting','Side-lying'];
 const INS = ['건강보험','자보','산재','일반'];   // 보험 구분 (자보 = 자동차보험, TA)
+// 치료 종류별 연한 파스텔 색 [배경, 테두리, 글자]
+const GROUP_COLORS = {
+  heat:['#fff1e8','#fdba8c','#9a3412'], elec:['#f3eeff','#c4b5fd','#5b21b6'], cold:['#e8f4ff','#93c5fd','#075985'],
+  laser:['#ffedf5','#f9a8d4','#9d174d'], traction:['#e9f8f0','#86efac','#166534'], exercise:['#fff9e0','#fcd34d','#854d0e'],
+  manual:['#e8f7f6','#5eead4','#115e59'], eswt:['#fdeeee','#fca5a5','#991b1b'] };
+const modColor = id => GROUP_COLORS[MOD(id)?.group] || ['#f1f3f6','#cbd5e1','#475467'];
+const modPill = (id, dim) => { const [bg,bd,fg]=modColor(id); return `<span class="mp${dim?' dim':''}" style="background:${bg};border-color:${bd};color:${fg}">${esc(MOD(id)?.en||MOD(id)?.name||id)}</span>`; };
+const modDots = ids => [...new Set(ids.map(id=>modColor(id)[1]))].map(c=>`<i class="dot" style="background:${c}"></i>`).join('');
 const inRoom = (m, room) => !!m && (m.room===room || (m.alsoRooms||[]).includes(room));
 const insTag = r => r.ins && r.ins!=='건강보험' ? `<span class="tag ins-${r.ins==='자보'?'ta':'etc'}">${esc(r.ins)}</span>` : '';
 const siteCount = r => (r.sites||[]).length + (r.siteEtc ? r.siteEtc.split(/[,，]/).filter(x=>x.trim()).length : 0);
@@ -228,7 +245,7 @@ const MODALITIES = [
     ],
     tpl:'{temp}, {towel} 적용, 자세 {pos}',
     basis:'한냉치료-콜드팩(사-101-1 가, MM011). 온열치료와 동시에 실시하면 한 가지만 산정. 외래 1일 1회(입원 1일 2회).' },
-  { id:'cryo', name:'한냉치료-냉동치료', en:'Cryotherapy', code:'MM012', coverage:'급여', room:'pt', min:5, phase:1, enabled:true, dailyOnce:true, group:'cold',
+  { id:'cryo', name:'한냉치료-크라이오', en:'Cryo', code:'MM012', coverage:'급여', room:'pt', min:2, phase:1, enabled:true, dailyOnce:true, group:'cold',
     fields:[
       {k:'method', label:'방식', type:'select', options:['냉각공기(Cryo-air)','CO₂ 냉동','냉동 스프레이','얼음 마사지'], def:'냉각공기(Cryo-air)'},
       {k:'temp', label:'분사 온도', type:'text', def:'-30℃', hint:'장비 설정값'},
@@ -236,7 +253,7 @@ const MODALITIES = [
       {k:'skin', label:'피부 확인', type:'select', options:['동상·과냉각 징후 없음 확인'], def:'동상·과냉각 징후 없음 확인'},
     ],
     tpl:'{method}, {temp}, 노즐 거리 {dist}cm 이동 분사, {skin}',
-    basis:'한냉치료-냉동치료(사-101-1 나, MM012). 온열치료와 동시에 실시하면 한 가지만 산정. 병원에서 비급여 크라이오로 운영하면 [설정]에서 코드·급여구분을 바꿔 사용.' },
+    basis:'한냉치료-크라이오(냉동치료, 사-101-1 나, MM012). 온열치료와 동시에 실시하면 한 가지만 산정. 병원에서 비급여 크라이오로 운영하면 [설정]에서 코드·급여구분을 바꿔 사용.' },
   { id:'laser', name:'재활저출력레이저치료', en:'LLLT', code:'MM085', coverage:'급여', room:'pt', min:5, phase:2, enabled:true, autoStop:true, group:'laser',
     fields:[
       {k:'wave', label:'파장', type:'text', def:'830nm', hint:'장비 사양'},
@@ -492,8 +509,16 @@ S.local.device ||= ((IS_GAS||IS_SERVER) ? '' : '이 기기');
 if(S.local.sound===undefined) S.local.sound=true;
 if(S.local.voice===undefined) S.local.voice=true;
 
+// 예전 버전의 기본값 — [설정] 저장 때 그대로 저장돼 있으면 새 기본값을 가리므로 지운다
+const OLD_MOD_DEFAULTS = { hotpack:{name:'표층열치료'}, cryo:{name:'한냉치료-냉동치료', min:5}, simpleEx:{min:15, phase:1}, complexEx:{phase:1}, eswt:{} };
 function mergeSettings(saved){
   const s = Object.assign(clone(DEFAULT_SETTINGS), saved||{});
+  s.mods = clone(s.mods||{});
+  for(const [id,o] of Object.entries(s.mods)){
+    const base=MODALITIES.find(m=>m.id===id), old=OLD_MOD_DEFAULTS[id]||{};
+    for(const k of Object.keys(o)) if(base && (o[k]===base[k] || (k in old && o[k]===old[k]))) delete o[k];
+    if(!Object.keys(o).length) delete s.mods[id];
+  }
   s.rooms = DEFAULT_SETTINGS.rooms.map(r => ({...r, ...((saved&&saved.rooms||[]).find(x=>x.id===r.id)||{})}));
   return s;
 }
@@ -640,8 +665,10 @@ function checkRecord(r, strict){
   if(!r.regNo) err.push('등록번호를 입력하세요.');
   if(!r.name) err.push('이름을 입력하세요.');
   if(strict){
-    if(!r.doctor) err.push('처방의를 선택하세요. (기록지 필수 기재사항)');
-    if(!r.therapist) err.push('시행자를 선택하세요. (기록지 필수 기재사항)');
+    if(!r.doctor) err.push(S.settings.doctors.length?'처방의를 선택하세요. (기록지 필수 기재사항)':'처방의 명단이 비어 있습니다 — [설정]에서 먼저 입력하세요.');
+    else if(!S.settings.doctors.includes(r.doctor)) err.push(`처방의 '${r.doctor}'은(는) 설정 명단에 없습니다 — 다시 선택하세요.`);
+    if(!r.therapist) err.push(S.settings.therapists.length?'시행자를 선택하세요. (기록지 필수 기재사항)':'시행자 명단이 비어 있습니다 — [설정]에서 먼저 입력하세요.');
+    else if(!S.settings.therapists.includes(r.therapist)) err.push(`시행자 '${r.therapist}'은(는) 설정 명단에 없습니다 — 다시 선택하세요.`);
     if(!siteText(r)) err.push('치료 부위를 입력하세요.');
     if(!(r.pre?.phrases?.length||r.pre?.text)) err.push('치료 전 상태를 입력하세요.');
     if(!(r.post?.phrases?.length||r.post?.text)) err.push('치료 후 상태를 입력하세요.');
@@ -692,6 +719,10 @@ async function run(p, label){
 }
 async function saveRecord(rec, {quiet}={}){
   const base = rec._base; const out = clone(rec); delete out._base;
+  if(!['done','cancelled'].includes(out.status)){   // 완료·취소된 예전 기록은 그대로 보존
+    if(out.doctor && !S.settings.doctors.includes(out.doctor)) out.doctor='';
+    if(out.therapist && !S.settings.therapists.includes(out.therapist)) out.therapist='';
+  }
   S.writeSeq = (S.writeSeq||0) + 1;
   out.updatedAt = nowIso(); out.updatedBy = S.local.device || '';
   out.emrText = ['ended','done'].includes(out.status) ? emrOf(out) : '';
@@ -812,12 +843,16 @@ function bedTile(room, b){
   const p=curPhase(r), ph=phasesOf(r), last=p===ph[ph.length-1];
   const nm=id=>MOD(id)?.en||MOD(id)?.name||id;
   const cur=r.items.filter(i=>i.phase===p).map(i=>nm(i.mid)).join('+');
+  const curPills=r.items.filter(i=>i.phase===p).map(i=>modPill(i.mid)).join('');
+  const nxtPills=!last ? ph.slice(ph.indexOf(p)+1).map(q=>r.items.filter(i=>i.phase===q).map(i=>modPill(i.mid,true)).join('')).join(' → ') : '';
+  const curIt=r.items.filter(i=>i.phase===p);   // 카드 색: ICT(같이 하는 전기치료)보다 주 치료(IR·콜드팩·크라이오 등) 색으로
+  const [tint,tbd]=modColor((curIt.find(i=>MOD(i.mid)?.group!=='elec')||curIt[0])?.mid);
   const nxt=!last ? ` → ${ph.slice(ph.indexOf(p)+1).map(q=>r.items.filter(i=>i.phase===q).map(i=>nm(i.mid)).join('+')).join(' → ')}` : '';
-  return `<div class="tile run" data-rid="${r.id}" data-room="${room.id}" data-bed="${b}" data-phase="${p}">
+  return `<div class="tile run" data-rid="${r.id}" data-room="${room.id}" data-bed="${b}" data-phase="${p}" style="--tint:${tint};--tbd:${tbd}">
     <button class="tile-body" data-act="bedMenu" data-id="${r.id}" title="베드 메뉴">
       <span class="row"><span class="no">${room.id==='ex'?'특'+b:b}</span><span class="grow"></span>${insTag(r)}</span>
       <span class="pt">${esc(r.name)}${r.items.some(i=>MOD(i.mid)?.coverage==='비급여')?' <span class="tag wait">비급여</span>':''}</span>
-      <span class="mods">${esc(cur)}${esc(nxt)}</span>
+      <span class="mods" title="${esc(cur+nxt)}">${curPills}${nxtPills?' → '+nxtPills:''}</span>
       <span class="timer" data-timer="${r.id}">--:--</span>
       <span class="bar"><b data-bar="${r.id}" style="width:0"></b></span>
     </button>
@@ -988,7 +1023,7 @@ function renderGuide(){
     <p class="small muted">근거: 건강보험 행위 급여목록 제7장 이학요법료 및 심사기준(심평원), 첨부 「물리치료 기록 작성 샘플」. 강도·조건은 <b>기본 권고값으로 고정 기록</b>됩니다(괄호 안 값). 병원 장비 설정이 다르면 기본값 변경을 요청하세요. 수가·기준은 개정될 수 있으므로 심평원 최신 고시로 주기적으로 확인하세요.</p>
     <div class="tablewrap"><table class="t">
       <thead><tr><th>항목</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간</th><th>기록하는 강도·조건</th><th>산정·기록 기준</th></tr></thead>
-      <tbody>${mods().map(m=>`<tr style="${m.enabled?'':'opacity:.55'}"><td><b>${esc(m.name)}</b><div class="small muted">${esc(m.en)}${m.enabled?'':' · 사용 안 함'}</div></td><td style="white-space:nowrap">${esc(m.code)}</td><td style="white-space:nowrap">${esc(m.coverage)}</td><td style="white-space:nowrap">${esc([m.room,...(m.alsoRooms||[])].map(roomName).join('·'))}</td><td style="white-space:nowrap">${m.min}분</td>
+      <tbody>${mods().map(m=>`<tr style="${m.enabled?'':'opacity:.55'}"><td><span class="dots">${modDots([m.id])}</span><b>${esc(m.name)}</b><div class="small muted">${esc(m.en)}${m.enabled?'':' · 사용 안 함'}</div></td><td style="white-space:nowrap">${esc(m.code)}</td><td style="white-space:nowrap">${esc(m.coverage)}</td><td style="white-space:nowrap">${esc([m.room,...(m.alsoRooms||[])].map(roomName).join('·'))}</td><td style="white-space:nowrap">${m.min}분</td>
         <td class="small">${(m.fields||[]).map(f=>esc(f.label)+(f.req?' <b style="color:var(--bad)">*</b>':'')+(f.def?` <span class="muted">(${esc(f.def)})</span>`:'')+(f.hint?` <span class="muted">— ${esc(f.hint)}</span>`:'')).join('<br>')}</td>
         <td class="small">${esc(m.basis)}</td></tr>`).join('')}</tbody></table></div>
   </div>
@@ -1037,7 +1072,7 @@ function renderSettings(){
   <div class="panel" style="margin-top:12px">
     <h2>치료 항목</h2>
     <p class="small muted">병원 수가표에 맞춰 코드·급여구분·기본시간을 조정하세요. '순서' 숫자가 같은 항목은 동시에, 큰 항목은 앞 치료가 끝나면 자동으로 이어서 진행됩니다(예: IR·ICT 1 → 레이저 2).</p>
-    <div class="tablewrap"><table class="t"><thead><tr><th>사용</th><th>이름</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간(분)</th><th>순서 <span class='muted'>(같으면 동시·크면 이어서)</span></th></tr></thead><tbody>
+    <div class="tablewrap"><table class="t" id="stModTable"><thead><tr><th>사용</th><th>이름</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간(분)</th><th>순서 <span class='muted'>(같으면 동시·크면 이어서)</span></th></tr></thead><tbody>
     ${mods().map(m=>`<tr data-mod="${m.id}"><td><input type="checkbox" data-k="enabled" ${m.enabled?'checked':''}></td>
       <td><input type="text" data-k="name" value="${esc(m.name)}"></td><td><input type="text" data-k="code" value="${esc(m.code)}" style="width:90px"></td>
       <td><select data-k="coverage">${['급여','비급여'].map(o=>`<option ${o===m.coverage?'selected':''}>${o}</option>`).join('')}</select></td>
@@ -1076,7 +1111,7 @@ function presetPanelHtml(){
   <p class="small muted" style="margin:4px 0 10px">치료 시작 창 위쪽의 빠른 선택 버튼입니다. 누르면 치료 항목·시간·순서가 한 번에 선택됩니다. 치료 시작 창의 [＋ 지금 선택 저장]으로도 추가할 수 있습니다.</p>
   <div class="grid2">${S.settings.rooms.map(room=>{ const list=presetsOf(room.id); return `<div>
     <div class="row" style="margin-bottom:6px"><b class="grow">${esc(room.name)}</b><button class="btn sm pri" data-act="presetEdit" data-room="${room.id}" data-i="-1">＋ 추가</button></div>
-    <div class="list">${list.map((p,i)=>`<div class="item"><div class="grow" style="min-width:0"><b>${esc(p.name)}</b><div class="small muted">${esc(presetSummary(p))}</div></div>
+    <div class="list">${list.map((p,i)=>`<div class="item"><div class="grow" style="min-width:0"><span class="dots">${modDots(p.items)}</span><b>${esc(p.name)}</b><div class="small muted">${esc(presetSummary(p))}</div></div>
       <button class="btn sm" data-act="presetMove" data-room="${room.id}" data-i="${i}" data-d="-1" ${i?'':'disabled'} title="위로">↑</button>
       <button class="btn sm" data-act="presetMove" data-room="${room.id}" data-i="${i}" data-d="1" ${i<list.length-1?'':'disabled'} title="아래로">↓</button>
       <button class="btn sm" data-act="presetEdit" data-room="${room.id}" data-i="${i}">수정</button>
@@ -1097,7 +1132,7 @@ function openPresetEditor(room, i){
   <div class="dlg-b">
     <label class="f req"><span>이름 (버튼에 표시)</span><input type="text" id="pName" value="${esc(p.name)}" placeholder="예: IR + ICT 10분"></label>
     <div class="small muted">포함할 치료를 체크하고 시간을 정하세요. 레이저는 앞 치료가 끝나면 자동으로 이어서, 단순운동은 순서를 고릅니다.</div>
-    <div class="list" id="pMods">${avail.map(m=>{ const on=p.items.includes(m.id); return `<div class="mod ${on?'on':''}" data-mod="${m.id}"><div class="mod-h">
+    <div class="list" id="pMods">${avail.map(m=>{ const on=p.items.includes(m.id); return `<div class="mod ${on?'on':''}" data-mod="${m.id}" style="--mbg:${modColor(m.id)[0]};--mbd:${modColor(m.id)[1]}"><div class="mod-h">
       <label class="row nm"><input type="checkbox" data-on ${on?'checked':''}> ${esc(m.name)} <span class="muted small">${esc(m.en)}${m.coverage==='비급여'?' · 비급여':''}</span></label><span class="grow"></span>
       <span class="mins"><button type="button" class="btn sm" data-act="minus">−</button><input type="text" inputmode="numeric" data-min value="${(p.min&&p.min[m.id])||m.min}"><span class="small">분</span><button type="button" class="btn sm" data-act="plus">＋</button></span>
       ${m.orderChoice?`<select data-order style="width:auto"><option value="after" ${(p.order&&p.order[m.id])!=='before'?'selected':''}>끝나고 이어서</option><option value="before" ${(p.order&&p.order[m.id])==='before'?'selected':''}>먼저(선행)</option></select>`:m.phase>1?`<span class="small muted" style="min-width:92px">앞 치료 후 이어서</span>`:`<span style="min-width:92px"></span>`}
@@ -1143,7 +1178,8 @@ function fixedView(m, it){
     ${it.start?`<div class="row small" style="margin-top:6px"><span class="muted">시간</span><input type="time" data-t="start" data-mid="${m.id}" value="${hm(it.start)}" style="width:auto"> ~ <input type="time" data-t="end" data-mid="${m.id}" value="${it.end?hm(it.end):''}" style="width:auto"></div>`:''}`;
 }
 function chipGroup(id, list, sel){ return `<div class="chips" id="${id}" data-multi="1">${list.map(o=>`<button type="button" class="chip ${(sel||[]).includes(o)?'on':''}" data-chip>${esc(o)}</button>`).join('')}</div>`; }
-function selectOpts(list, v, ph){ if(!v && list.length===1) v=list[0]; const L=[...list]; if(v && !L.includes(v)) L.unshift(v); return `<option value="">${ph||'선택'}</option>`+L.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join(''); }
+/** strict: 목록에 없는 값은 선택지로 넣지 않음 (처방의·시행자 — [설정] 명단에 있는 사람만) */
+function selectOpts(list, v, ph, strict){ if(strict && v && !list.includes(v)) v=''; if(!v && list.length===1) v=list[0]; const L=[...list]; if(v && !L.includes(v)) L.unshift(v); return `<option value="">${ph||'선택'}</option>`+L.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join(''); }
 const readChips = el => el ? $$('.chip.on', el).map(b=>b.textContent) : [];
 // NRS 입력은 없앰 (선택 항목이 많아 불편) — 예전 기록의 값만 기록문에 표시
 const nrsSel = (id, v) => `<select id="${id}" style="width:auto"><option value="">NRS -</option>${[...Array(11).keys()].map(n=>`<option value="${n}" ${String(v)===String(n)?'selected':''}>NRS ${n}</option>`).join('')}</select>`;
@@ -1161,17 +1197,17 @@ async function openStart(bed, waitingRec){
       <label class="f"><span>시작 시각</span><input type="time" id="sStart" value="${hm(nowIso())}"></label>
     </div>
     <div id="sPlanNote" class="small muted" style="min-height:1.5em"></div>
-    <div><div class="small muted" style="margin-bottom:4px">빠른 선택</div><div class="chips">${presetsOf(room).map((p,i)=>p.items.every(id=>MOD(id)?.enabled&&inRoom(MOD(id),room))?`<button type="button" class="chip" data-act="preset" data-i="${i}" title="${esc(presetSummary(p))}">${esc(p.name)}</button>`:'').join('')}
+    <div><div class="small muted" style="margin-bottom:4px">빠른 선택</div><div class="chips">${presetsOf(room).map((p,i)=>p.items.every(id=>MOD(id)?.enabled&&inRoom(MOD(id),room))?`<button type="button" class="chip" data-act="preset" data-i="${i}" title="${esc(presetSummary(p))}"><span class="dots">${modDots(p.items)}</span>${esc(p.name)}</button>`:'').join('')}
       <button type="button" class="chip" data-act="savePresetFromStart" data-room="${room}" style="border-style:dashed" title="지금 고른 치료 조합을 빠른 선택에 추가">＋ 지금 선택 저장</button>
       <span class="small muted" style="align-self:center;margin-left:6px">전체 시간:</span>${[10,15,20].map(n=>`<button type="button" class="chip" data-act="allMin" data-n="${n}">${n}분</button>`).join('')}</div></div>
-    <div class="list" id="sMods">${avail.map(m=>`<div class="mod" data-mod="${m.id}"><div class="mod-h">
+    <div class="list" id="sMods">${avail.map(m=>`<div class="mod" data-mod="${m.id}" style="--mbg:${modColor(m.id)[0]};--mbd:${modColor(m.id)[1]}"><div class="mod-h">
       <label class="row nm"><input type="checkbox" data-on> ${esc(m.name)} <span class="muted small">${esc(m.en)} · ${esc(m.code)}${m.coverage==='비급여'?' · 비급여':''}</span></label><span class="grow"></span>
       <span class="mins"><button type="button" class="btn sm" data-act="minus">−</button><input type="text" inputmode="numeric" data-min value="${m.min}"><span class="small">분</span><button type="button" class="btn sm" data-act="plus">＋</button></span>
       ${m.orderChoice?`<select data-order style="width:auto" title="다른 치료와의 순서"><option value="after">끝나고 이어서</option><option value="before">먼저(선행)</option></select>`:m.phase>1?`<span class="small muted" style="min-width:92px">앞 치료 후 이어서</span>`:`<span style="min-width:92px"></span>`}
     </div></div>`).join('')}</div>
     <div class="grid2">
-      <label class="f"><span>처방의</span><select id="sDoctor">${selectOpts(S.settings.doctors, S.local.lastDoctor)}</select></label>
-      <label class="f"><span>시행자</span><select id="sTher">${selectOpts(S.settings.therapists, S.local.lastTherapist)}</select></label>
+      <label class="f"><span>처방의</span><select id="sDoctor">${selectOpts(S.settings.doctors, S.local.lastDoctor, '', true)}</select></label>
+      <label class="f"><span>시행자</span><select id="sTher">${selectOpts(S.settings.therapists, S.local.lastTherapist, '', true)}</select></label>
       <div style="grid-column:1/-1"><div class="f req" style="font-size:13px;color:var(--muted);font-weight:600"><span>치료 부위 <b id="sTaHint" style="color:#b42318" ${w.ins==='자보'?'':'hidden'}>· 자보: 두 부위 선택</b></span></div>
         <div class="row" style="margin:4px 0"><div class="seg" id="sSide">${['Rt.','Lt.','Both',''].map(o=>`<button type="button" data-side="${o}" class="${o===''?'on':''}">${o||'좌우 없음'}</button>`).join('')}</div>
         <input type="text" id="sSiteEtc" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
@@ -1219,7 +1255,7 @@ async function openStart(bed, waitingRec){
         const extra=(p.plan.sites||[]).filter(x=>!known.has(x)); if(extra.length) $('#sSiteEtc').value=extra.join(', ');
         $$('#sSide [data-side]').forEach(b=>b.classList.toggle('on', b.dataset.side===(p.plan.side||'')));
       }
-      if(p.plan.doctor && !$('#sDoctor').value) $('#sDoctor').innerHTML=selectOpts(S.settings.doctors, p.plan.doctor);
+      if(p.plan.doctor && !$('#sDoctor').value && S.settings.doctors.includes(p.plan.doctor)) $('#sDoctor').innerHTML=selectOpts(S.settings.doctors, p.plan.doctor, '', true);
       $('#sPlanNote').innerHTML=`✓ 지난 처방 불러옴 (${esc(p.plan.date)}: ${esc(p.plan.items.map(i=>MOD(i.mid)?.en).join(' + '))}${p.plan.sites?.length?' · '+esc([p.plan.side,p.plan.sites.join(', ')].filter(Boolean).join(' ')):''})${p.memo?` · <b>메모: ${esc(p.memo)}</b>`:''}`;
     } else $('#sPlanNote').innerHTML=p.memo?`<b>메모: ${esc(p.memo)}</b>`:'';
   };
@@ -1320,8 +1356,8 @@ async function openEdit(id, date){
       <label class="f req"><span>이름</span><input type="text" id="eName" value="${esc(r.name)}"></label>
       <label class="f"><span>구분</span><div class="row" style="flex-wrap:nowrap"><select id="eVisit">${['외래','입원'].map(o=>`<option ${o===r.visit?'selected':''}>${o}</option>`).join('')}</select><select id="eIns">${INS.map(o=>`<option ${o===(r.ins||'건강보험')?'selected':''}>${o}</option>`).join('')}</select></div></label>
       <label class="f"><span>치료실·베드</span><input type="text" value="${esc(roomName(r.room))} ${r.bed||''}번 · ${dateLabel(r.date)}" disabled></label>
-      <label class="f req"><span>처방의</span><select id="eDoctor">${selectOpts(S.settings.doctors, r.doctor)}</select></label>
-      <label class="f req"><span>시행자</span><select id="eTher">${selectOpts(S.settings.therapists, r.therapist)}</select></label>
+      <label class="f req"><span>처방의</span><select id="eDoctor">${selectOpts(S.settings.doctors, r.doctor, '', true)}</select>${r.doctor&&!S.settings.doctors.includes(r.doctor)?`<span class="small" style="color:var(--bad)">'${esc(r.doctor)}'은(는) 설정 명단에 없습니다</span>`:''}</label>
+      <label class="f req"><span>시행자</span><select id="eTher">${selectOpts(S.settings.therapists, r.therapist, '', true)}</select>${r.therapist&&!S.settings.therapists.includes(r.therapist)?`<span class="small" style="color:var(--bad)">'${esc(r.therapist)}'은(는) 설정 명단에 없습니다</span>`:''}</label>
       <label class="f" style="grid-column:1/-1"><span>Dx (상병)</span><input type="text" id="eDx" value="${esc(r.dx||'')}" placeholder="예: M75.1 회전근개 증후군"></label>
     </div>
     <details ${siteText(r)?'':'open'}><summary style="cursor:pointer"><span class="muted small" style="font-weight:600">치료 부위</span> <b>${esc(siteText(r)||'(시작 때 선택 안 함 — 여기서 선택)')}</b> <span class="small muted">· 바꾸려면 누르기</span></summary>
@@ -1702,7 +1738,9 @@ async function saveSettingsForm(){
   s.doctors=lines('stDoctors'); s.therapists=lines('stTherapists'); s.sites=lines('stSites'); s.showCode=$('#stShowCode').checked;
   s.phrases={pre:lines('stPre'), during:lines('stDuring'), post:lines('stPost')};
   s.mods={};
-  for(const tr of $$('[data-mod]')){ const o={}; for(const el of $$('[data-k]',tr)) o[el.dataset.k]= el.type==='checkbox'?el.checked : el.type==='number'?Math.max(1,parseInt(el.value)||1) : el.value.trim(); s.mods[tr.dataset.mod]=o; }
+  for(const tr of $$('#stModTable [data-mod]')){ const base=MODALITIES.find(m=>m.id===tr.dataset.mod), o={};
+    for(const el of $$('[data-k]',tr)){ const v = el.type==='checkbox'?el.checked : el.type==='number'?Math.max(1,parseInt(el.value)||1) : el.value.trim(); if(!base || v!==base[el.dataset.k]) o[el.dataset.k]=v; }
+    if(Object.keys(o).length) s.mods[tr.dataset.mod]=o; }   // 기본값과 다른 것만 저장 → 프로그램 기본값이 바뀌면 자동 반영
   await run(Store.saveSettings(s)); S.settings=mergeSettings(s); toast('설정을 저장했습니다.'); render();
 }
 
