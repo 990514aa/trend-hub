@@ -342,6 +342,8 @@ const PRESETS = {
 const DEFAULT_SETTINGS = {
   rooms:[{id:'pt', name:'물리치료실', beds:12, first:1}, {id:'ex', name:'운동·특수치료실', beds:4, first:1}],
   hospital:'연세오케이정형외과',
+  // 치료 전·후 상태 고정 문구 (모든 기록에 자동 입력, 필요한 환자만 기록 창에서 수정)
+  fixedPre:'통증 및 부종 호소', fixedPost:'통증 경감 및 부종 감소',
   doctors:[], therapists:[],
   sites:['Neck','C-spine','T-spine','L-spine','Shoulder','Elbow','Wrist','Hand','Hip','Knee','Ankle','Foot','Upper trapezius','Scapular area','Buttock','Thigh','Calf'],
   showCode:true,
@@ -615,6 +617,14 @@ function genEmr(r){
   return L.join('\n');
 }
 const emrOf = r => r.emrOverride || genEmr(r);
+
+/** 치료 전·후 상태가 비어 있으면 고정 문구로 채움 */
+function fillFixed(r){
+  const pre=S.settings.fixedPre, post=S.settings.fixedPost;
+  if(pre && !(r.pre?.phrases?.length || r.pre?.text)) r.pre={...(r.pre||{}), phrases:[pre]};
+  if(post && !(r.post?.phrases?.length || r.post?.text)) r.post={...(r.post||{}), phrases:[post]};
+  return r;
+}
 
 /* ===================== 산정기준 점검 ===================== */
 function checkRecord(r, strict){
@@ -998,6 +1008,8 @@ function renderSettings(){
     <div class="panel">
       <h2>이 기기</h2>
       <label class="f"><span>병원 이름 (화면 위쪽에 표시 · 모든 기기 공통)</span><input type="text" id="stHospital" value="${esc(S.settings.hospital||'')}"></label>
+      <label class="f"><span>치료 전 상태 고정 문구</span><input type="text" id="stFixedPre" value="${esc(S.settings.fixedPre||'')}"></label>
+      <label class="f"><span>치료 후 상태 고정 문구</span><input type="text" id="stFixedPost" value="${esc(S.settings.fixedPost||'')}"></label>
       <label class="f"><span>기기 이름 (수정 이력에 표시)</span><input type="text" id="stDevice" value="${esc(S.local.device||'')}" placeholder="예: 물리치료실 PC1"></label>
       <div class="row" style="margin-top:8px"><label class="row small"><input type="checkbox" id="stSound" ${S.local.sound?'checked':''}> 종료 알람 소리</label>
       <label class="row small"><input type="checkbox" id="stVoice" ${S.local.voice?'checked':''}> 음성 안내 ("3번 베드 치료 종료")</label></div>
@@ -1107,8 +1119,6 @@ async function openStart(bed, waitingRec){
         <div class="row" style="margin:4px 0"><div class="seg" id="sSide">${['Rt.','Lt.','Both',''].map(o=>`<button type="button" data-side="${o}" class="${o===''?'on':''}">${o||'좌우 없음'}</button>`).join('')}</div>
         <input type="text" id="sSiteEtc" placeholder="추가 부위·상세 (직접 입력)" class="grow"></div>
         ${chipGroup('sSites', S.settings.sites, [])}</div>
-      <label class="f" style="grid-column:1/-1"><span>치료 전 상태 (지금 입력하거나 종료 후 입력)</span>${chipGroup('sPre', phrases('pre'), [])}</label>
- <div class="row"><input type="text" id="sPreT" placeholder="환자 호소 (예: 좌측 어깨 들어올릴 때 통증)" class="grow"></div>
     </div>
     <div id="sWarn"></div>
   </div>
@@ -1228,8 +1238,8 @@ async function doStart(bed, wid){
     doctor:$('#sDoctor').value, therapist:$('#sTher').value,
     dx:plan.dx||'', sites:readChips($('#sSites')), side:$('#sSide .on')?.dataset.side||'', siteEtc:$('#sSiteEtc').value.trim(),
     items, startAt:t, endAt:null, status:'running',
-    pre:{phrases:readChips($('#sPre')), text:$('#sPreT').value.trim()},
-    during:{phrases:[phrases('during')[0]], text:''}, post:{phrases:[], nrs:'', text:''}, emrDone:false,
+    pre:{phrases:S.settings.fixedPre?[S.settings.fixedPre]:[], text:''},
+    during:{phrases:[phrases('during')[0]], text:''}, post:{phrases:S.settings.fixedPost?[S.settings.fixedPost]:[], text:''}, emrDone:false,
   };
   S.local.lastDoctor=rec.doctor||S.local.lastDoctor; S.local.lastTherapist=rec.therapist||S.local.lastTherapist; saveLocal();
   S.pickWaiting=null; closeDlg();
@@ -1242,6 +1252,7 @@ async function openEdit(id, date){
   let r=S.records.find(x=>x.id===id);
   if(!r){ const rows=await run(Store.listRange(date,date),'불러오는 중…'); r=rows.find(x=>x.id===id); }
   if(!r) return toast('기록을 찾을 수 없습니다.');
+  if(r.status!=='done') r=fillFixed(clone(r));
   const e=withBase(r);
   const d=openDlg(`
   <div class="dlg-h"><h2>치료 기록 — ${esc(r.regNo)} ${esc(r.name)}</h2>${statusTag(r)}<span class="grow"></span><button class="btn sm" data-act="close">닫기</button></div>
@@ -1607,6 +1618,7 @@ async function saveSettingsForm(){
   const s=clone(S.settings);
   s.rooms=s.rooms.map(r=>({...r, name:$(`[data-room-name="${r.id}"]`).value.trim()||r.name, beds:Math.min(40,Math.max(1,parseInt($(`[data-room-beds="${r.id}"]`).value)||r.beds)), first:Math.max(1,parseInt($(`[data-room-first="${r.id}"]`).value)||r.first||1)}));
   s.hospital=$('#stHospital').value.trim();
+  s.fixedPre=$('#stFixedPre').value.trim(); s.fixedPost=$('#stFixedPost').value.trim();
   s.doctors=lines('stDoctors'); s.therapists=lines('stTherapists'); s.sites=lines('stSites'); s.showCode=$('#stShowCode').checked;
   s.phrases={pre:lines('stPre'), during:lines('stDuring'), post:lines('stPost')};
   s.mods={};
