@@ -488,7 +488,7 @@ function inBoard(r, date){
 function rememberPatient(patients, rec){
   const p = patients[rec.regNo] || {regNo:rec.regNo, memo:''};
   p.name = rec.name;
-  p.plan = {room:rec.room, visit:rec.visit, ins:rec.ins, dx:rec.dx, sites:rec.sites, side:rec.side, doctor:rec.doctor,
+  p.plan = {room:rec.startRoom||rec.room, visit:rec.visit, ins:rec.ins, dx:rec.dx, sites:rec.sites, side:rec.side, doctor:rec.doctor,
             items:rec.items.map(i=>({mid:i.mid, min:i.min, phase:i.phase, params:i.params})), date:rec.date};
   p.updatedAt = nowIso(); patients[rec.regNo]=p;
 }
@@ -610,7 +610,7 @@ function genEmr(r){
   const L=[]; const sc=S.settings.showCode;
   const st=r.items.map(i=>i.start).filter(Boolean).sort()[0], en=r.items.map(i=>i.end).filter(Boolean).sort().pop();
   const ph=phasesOf(r);
-  L.push(`■ ${roomName(r.room)} 치료기록  ${dateLabel(r.date)}  [${r.visit||'외래'}${r.ins&&r.ins!=='건강보험'?'·'+r.ins:''}]`);
+  L.push(`■ ${[...new Set([r.startRoom, r.room].filter(Boolean))].map(roomName).join(' → ')} 치료기록  ${dateLabel(r.date)}  [${r.visit||'외래'}${r.ins&&r.ins!=='건강보험'?'·'+r.ins:''}]`);
   L.push(`환자: ${r.regNo} ${r.name}`);
   L.push(`처방의: ${r.doctor||'(미입력)'}   시행자: ${r.therapist||'(미입력)'}`);
   if(r.dx) L.push(`Dx(상병): ${r.dx}`);
@@ -917,14 +917,35 @@ function openBedMenu(r){
   <div class="dlg-b">
     <div class="kv"><span class="muted">시작</span><span>${hm(r.startAt)} · 시행자 ${esc(r.therapist||'-')} · 부위 ${esc(siteText(r)||'-')}</span>
     ${r.items.slice().sort((x,y)=>x.phase-y.phase).map(i=>`<span class="muted">${esc(MOD(i.mid)?.en||'')}</span><span>${esc(MOD(i.mid)?.name||i.mid)} ${i.min}분 · ${hm(i.start)}~${hm(new Date(tms(i.start)+i.min*60000).toISOString())}${i.phase===p?' <span class="tag run">진행 중</span>':tms(i.start)>Date.now()?' <span class="tag">예정</span>':''}</span>`).join('')}</div>
-    <div><div class="small muted" style="margin-bottom:4px">베드 이동 (잘못 배정했을 때) — 옮길 빈 베드 선택</div>
-      <div class="chips">${freeBeds(r.room).map(b=>`<button type="button" class="chip" data-act="moveBed" data-id="${r.id}" data-bed="${b}">${r.room==='ex'?'특'+b:b+'번'}</button>`).join('')||'<span class="small muted">빈 베드 없음</span>'}</div></div>
+    <div><div class="small muted" style="margin-bottom:4px">베드 이동 — 옮길 빈 베드 선택 (운동·특수치료실로 옮기면 물리치료실 베드가 비워집니다)</div>
+      ${[r.room, ...S.settings.rooms.map(x=>x.id).filter(x=>x!==r.room)].map(rid=>`<div class="small muted" style="margin:6px 0 2px">${esc(roomName(rid))}${rid!==r.room?' (치료실 이동)':''}</div><div class="chips">${freeBeds(rid).map(b=>`<button type="button" class="chip" data-act="moveBed" data-id="${r.id}" data-room="${rid}" data-bed="${b}">${rid==='ex'?'특'+b:b+'번'}</button>`).join('')||'<span class="small muted">빈 베드 없음</span>'}</div>`).join('')}
+      </div>
   </div>
   <div class="dlg-f"><button class="btn bad" data-act="cancelRun" data-id="${r.id}">치료 취소</button><span class="grow"></span>
     <button class="btn pri" data-act="addRx" data-id="${r.id}">＋ 추가 처방</button>
     <button class="btn" data-act="edit" data-id="${r.id}">기록 보기·수정</button>
     <button class="btn" data-act="extend" data-id="${r.id}">+5분 연장</button>
     <button class="btn ok" data-act="advance" data-id="${r.id}">치료 종료</button></div>`);
+}
+const bedName = (room, b) => room==='ex' ? `특수 ${b}번` : `${b}번`;
+/** 치료실 바꾸기(물리치료실 ↔ 운동·특수치료실) — 처음 치료실은 startRoom 으로 남김 */
+function setRoom(r, room, bed){
+  if(room && room!==r.room){ r.startRoom = r.startRoom || r.room; r.moves=[...(r.moves||[]), {at:nowIso(), from:`${r.room}:${r.bed}`, to:`${room}:${bed}`}]; r.room=room; if(r.startRoom===room){ delete r.startRoom; } }
+  r.bed=+bed;
+}
+/** 치료 중 환자 베드 이동 (다른 치료실 포함). 옮길 곳에서 못 하는 치료가 아직 진행 중이면 확인 */
+async function moveRec(rec, room, bed){
+  room = room || rec.room;
+  if(!freeBeds(room).includes(+bed)){ toast('⛔ 이미 사용 중인 베드입니다.', 'alarm'); return; }
+  if(room!==rec.room){
+    const now=Date.now(), left=rec.items.filter(i=>!i.end && i.start && tms(i.start)<=now && tms(i.start)+i.min*60000>now && !inRoom(MOD(i.mid), room));
+    if(left.length){
+      const ok=await askConfirm(`${roomName(room)}로 옮길까요?`, `<p style="margin:0">${left.map(i=>`<b>${esc(MOD(i.mid)?.en||i.mid)}</b> 남은 ${Math.ceil((tms(i.start)+i.min*60000-now)/60000)}분`).join(', ')} — 아직 진행 중입니다.</p><p class="small muted" style="margin:0">옮겨도 시간표는 그대로 이어지고, 기록문에는 두 치료실이 함께 표시됩니다.</p>`, '옮기기');
+      if(!ok) return;
+    }
+  }
+  const r=withBase(rec); const from=`${roomName(r.room)} ${bedLabel(r)}`; setRoom(r, room, bed); closeDlg(); await saveRecord(r);
+  toast(`${from} → ${roomName(r.room)} ${bedLabel(r)} 베드로 옮겼습니다.`);
 }
 /** 치료 중 처방 추가 (처방을 깜빡했을 때) */
 function openAddRx(r){
@@ -964,10 +985,11 @@ async function saveAddRx(rec){
   toast(`${bedLabel(r)} 베드 ${r.name} 추가 처방: ${added.join(', ')}`, '', 5000);
 }
 /** 종료를 잘못 누른 기록(작성 대기)을 다시 치료 중으로 — bed 생략 시 원래 베드, 차 있으면 빈 베드 고르기 */
-async function resumeRec(rec, bed){
+async function resumeRec(rec, bed, room){
+  room = room || rec?.room;
   if(!rec || rec.status!=='ended'){ toast('작성 대기 상태인 기록만 다시 올릴 수 있습니다.'); return; }
   if(rec.date!==S.date){ toast('오늘 치료만 다시 올릴 수 있습니다. 지난 기록은 [작성]에서 시각을 고치세요.'); return; }
-  const free=freeBeds(rec.room);
+  const free=freeBeds(room);
   if(bed==null){
     if(free.includes(+rec.bed)) bed=+rec.bed;
     else {
@@ -980,7 +1002,7 @@ async function resumeRec(rec, bed){
   if(!free.includes(+bed)){ toast('⛔ 이미 사용 중인 베드입니다.', 'alarm'); return; }
   const r=withBase(rec);
   r.items = rec.resume?.items ? clone(rec.resume.items) : r.items.map(i=>({...i, end:null}));
-  delete r.resume; r.status='running'; r.endAt=null; r.bed=+bed;
+  delete r.resume; r.status='running'; r.endAt=null; setRoom(r, room, bed);
   schedule(r); r.startAt=r.items.map(i=>i.start).filter(Boolean).sort()[0]||r.startAt;
   closeDlg(); await saveRecord(r);
   toast(`↩ ${bedLabel(r)} 베드 ${r.name} 치료를 다시 진행합니다.`);
@@ -1050,7 +1072,7 @@ function renderLedger(){
     <thead><tr><th class="no-print"><input type="checkbox" id="selAll"></th><th>시간</th><th>치료실/베드</th><th>등록번호</th><th>이름</th><th>치료 항목</th><th>처방의</th><th>시행자</th><th>상태</th><th class="no-print"></th></tr></thead>
     <tbody>${rows.map(r=>`<tr class="${r.status==='cancelled'?'cancel':''}">
       <td class="no-print"><input type="checkbox" class="sel" value="${r.id}"></td>
-      <td>${hm(r.startAt)}~${r.endAt?hm(r.endAt):''}</td><td>${esc(roomName(r.room))} ${r.bed?r.bed+'번':''}</td>
+      <td>${hm(r.startAt)}~${r.endAt?hm(r.endAt):''}</td><td>${r.startRoom?`<span class="small muted">${esc(roomName(r.startRoom))} →</span> `:''}${esc(roomName(r.room))} ${r.bed?r.bed+'번':''}</td>
       <td>${esc(r.regNo)}</td><td>${esc(r.name)}</td><td>${esc(r.items.map(i=>`${MOD(i.mid)?.en||i.mid} ${i.start&&i.end?mins(i.start,i.end):i.min}′`).join(', '))}${r.items.some(i=>MOD(i.mid)?.coverage==='비급여')?' <span class="tag wait">비급여</span>':''}</td>
       <td>${esc(r.doctor||'')}</td><td>${esc(r.therapist||'')}</td><td>${statusTag(r)} ${insTag(r)}${r.status==='done'?` <button class="btn sm no-print" data-act="emrToggle" data-id="${r.id}" style="padding:1px 7px">${r.emrDone?'EMR 취소':'EMR ✓'}</button>`:''}${r.cancelReason?`<div class="small muted">${esc(r.cancelReason)}</div>`:''}</td>
       <td class="no-print"><button class="btn sm" data-act="edit" data-id="${r.id}" data-date="${r.date}">열기</button></td></tr>`).join('')}</tbody>
@@ -1551,8 +1573,8 @@ document.addEventListener('pointerdown', unlockAudio, {capture:true});
 let drag=null, suppressClick=false;
 function dragInfo(){
   if(!drag) return null;
-  if(drag.kind==='rec'){ const r=S.records.find(x=>x.id===drag.id); return r&&r.status==='running'?{label:`${bedLabel(r)} ${r.name}`, room:r.room, rec:r}:null; }
-  if(drag.kind==='ended'){ const r=S.records.find(x=>x.id===drag.id); return r&&r.status==='ended'&&r.date===S.date?{label:`↩ ${r.name}`, room:r.room, rec:r}:null; }
+  if(drag.kind==='rec'){ const r=S.records.find(x=>x.id===drag.id); return r&&r.status==='running'?{label:`${bedLabel(r)} ${r.name}`, room:null, rec:r}:null; }
+  if(drag.kind==='ended'){ const r=S.records.find(x=>x.id===drag.id); return r&&r.status==='ended'&&r.date===S.date?{label:`↩ ${r.name}`, room:null, rec:r}:null; }
   const w=S.records.find(x=>x.id===drag.id); return w&&w.status==='waiting'?{label:w.name, room:null, rec:w}:null;
 }
 function dropCheck(tile, info){
@@ -1612,11 +1634,8 @@ document.addEventListener('pointerup', async ev=>{
   dragEnd();
   if(!c || c.silent) return;
   if(!c.ok){ toast('⛔ '+c.msg, 'alarm', 3500); return; }
-  if(kind==='ended'){ await resumeRec(info.rec, c.bed); return; }
-  if(kind==='rec'){
-    if(!freeBeds(c.room).includes(c.bed)){ toast('⛔ 방금 다른 기기에서 사용하기 시작한 베드입니다.', 'alarm'); return; }
-    const r=withBase(info.rec); const from=bedLabel(r); r.bed=c.bed; await saveRecord(r); toast(`${from} → ${bedLabel(r)} 베드로 옮겼습니다.`);
-  } else {
+  if(kind==='ended'){ await resumeRec(info.rec, c.bed, c.room); return; }
+  if(kind==='rec'){ await moveRec(info.rec, c.room, c.bed); } else {
     S.room=c.room; S.pickWaiting=null; openStart(c.bed, info.rec);
   }
 });
@@ -1637,9 +1656,7 @@ document.addEventListener('click', async ev=>{
     case 'addRx': openAddRx(rec); break;
     case 'saveAddRx': saveAddRx(rec); break;
     case 'resumeTo': resumeRec(rec, +a.dataset.bed); break;
-    case 'moveBed': {
-      const nb=+a.dataset.bed; if(!freeBeds(rec.room).includes(nb)){ toast('이미 사용 중인 베드입니다.'); break; }
-      const r=withBase(rec); const from=bedLabel(r); r.bed=nb; closeDlg(); await saveRecord(r); toast(`${from} → ${bedLabel(r)} 베드로 옮겼습니다.`); break; }
+    case 'moveBed': moveRec(rec, a.dataset.room||rec.room, +a.dataset.bed); break;
     case 'hold': {
       const bed=+a.dataset.bed, roomId=a.dataset.room; if(!freeBeds(roomId).includes(bed)){ toast('이미 사용 중인 베드입니다.'); break; }
       const w=S.pickWaiting && S.records.find(r=>r.id===S.pickWaiting);

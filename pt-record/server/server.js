@@ -172,7 +172,7 @@ function readPatients() { return readJSON(P('patients.json'), {}); }
 function rememberPatient(pats, rec) {
   const p = pats[rec.regNo] || { regNo: rec.regNo, memo: '' };
   p.name = rec.name;
-  p.plan = { room: rec.room, visit: rec.visit, ins: rec.ins, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
+  p.plan = { room: rec.startRoom || rec.room, visit: rec.visit, ins: rec.ins, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
     items: (rec.items || []).map(i => ({ mid: i.mid, min: i.min, phase: i.phase, params: i.params })), date: rec.date };
   p.updatedAt = new Date().toISOString(); pats[rec.regNo] = p;
 }

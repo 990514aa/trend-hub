@@ -272,7 +272,7 @@ function rememberPatient_(rec) {
   savePatientRow_({
     regNo: rec.regNo, name: rec.name, memo: cur.memo,
     plan: {
-      room: rec.room, visit: rec.visit, ins: rec.ins, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
+      room: rec.startRoom || rec.room, visit: rec.visit, ins: rec.ins, dx: rec.dx, sites: rec.sites, side: rec.side, doctor: rec.doctor,
       items: (rec.items || []).map(function (i) { return { mid: i.mid, min: i.min, phase: i.phase, params: i.params }; }),
       date: rec.date
     }
