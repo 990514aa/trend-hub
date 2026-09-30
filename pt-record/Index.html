@@ -241,7 +241,9 @@ const GROUP_COLORS = {
 const modColor = id => GROUP_COLORS[MOD(id)?.group] || ['#f1f3f6','#cbd5e1','#475467'];
 const modPill = (id, dim) => { const [bg,bd,fg]=modColor(id); return `<span class="mp${dim?' dim':''}" style="background:${bg};border-color:${bd};color:${fg}">${esc(MOD(id)?.en||MOD(id)?.name||id)}</span>`; };
 const modDots = ids => [...new Set(ids.map(id=>modColor(id)[1]))].map(c=>`<i class="dot" style="background:${c}"></i>`).join('');
-const inRoom = (m, room) => !!m && (m.room===room || (m.alsoRooms||[]).includes(room));
+const inRoom = (m, room) => !!m && (m.room==='both' || m.room===room || (m.alsoRooms||[]).includes(room));
+/** 설정 표에 보일 치료실 값: 두 치료실 모두 가능하면 'both' */
+const roomSel = m => (inRoom(m,'pt') && inRoom(m,'ex')) ? 'both' : m.room;
 const insTag = r => r.ins && r.ins!=='건강보험' ? `<span class="tag ins-${r.ins==='자보'?'ta':'etc'}">${esc(r.ins)}</span>` : '';
 const siteCount = r => (r.sites||[]).length + (r.siteEtc ? r.siteEtc.split(/[,，]/).filter(x=>x.trim()).length : 0);
 const MODALITIES = [
@@ -560,7 +562,7 @@ function mergeSettings(saved){
   s.mods = clone(s.mods||{});
   for(const [id,o] of Object.entries(s.mods)){
     const base=MODALITIES.find(m=>m.id===id), old=OLD_MOD_DEFAULTS[id]||{};
-    for(const k of Object.keys(o)) if(base && (o[k]===base[k] || (k in old && o[k]===old[k]))) delete o[k];
+    for(const k of Object.keys(o)) if(base && (o[k]===(k==='room'?roomSel(base):base[k]) || (k in old && o[k]===old[k]))) delete o[k];
     if(!Object.keys(o).length) delete s.mods[id];
   }
   s.rooms = DEFAULT_SETTINGS.rooms.map(r => ({...r, ...((saved&&saved.rooms||[]).find(x=>x.id===r.id)||{})}));
@@ -568,7 +570,8 @@ function mergeSettings(saved){
 }
 function MOD(id){
   const base = MODALITIES.find(m=>m.id===id); if(!base) return null;
-  return {...base, ...(S.settings.mods[id]||{})};
+  const o=S.settings.mods[id]||{};
+  return {...base, ...o, ...(o.room ? {alsoRooms:[]} : {})};
 }
 const mods = () => MODALITIES.map(m=>MOD(m.id));
 const phrases = k => (S.settings.phrases && S.settings.phrases[k] && S.settings.phrases[k].length) ? S.settings.phrases[k] : PHRASES[k];
@@ -1209,7 +1212,7 @@ function renderGuide(){
     <p class="small muted">근거: 건강보험 행위 급여목록 제7장 이학요법료 및 심사기준(심평원), 첨부 「물리치료 기록 작성 샘플」. 강도·조건은 <b>기본 권고값으로 고정 기록</b>됩니다(괄호 안 값). 병원 장비 설정이 다르면 기본값 변경을 요청하세요. 수가·기준은 개정될 수 있으므로 심평원 최신 고시로 주기적으로 확인하세요.</p>
     <div class="tablewrap"><table class="t">
       <thead><tr><th>항목</th><th>코드</th><th>구분</th><th>치료실</th><th>기본시간</th><th>기록하는 강도·조건</th><th>산정·기록 기준</th></tr></thead>
-      <tbody>${mods().map(m=>`<tr style="${m.enabled?'':'opacity:.55'}"><td><span class="dots">${modDots([m.id])}</span><b>${esc(m.name)}</b><div class="small muted">${esc(m.en)}${m.enabled?'':' · 사용 안 함'}</div></td><td style="white-space:nowrap">${esc(m.code)}</td><td style="white-space:nowrap">${esc(m.coverage)}</td><td style="white-space:nowrap">${esc([m.room,...(m.alsoRooms||[])].map(roomName).join('·'))}</td><td style="white-space:nowrap">${m.min}분</td>
+      <tbody>${mods().map(m=>`<tr style="${m.enabled?'':'opacity:.55'}"><td><span class="dots">${modDots([m.id])}</span><b>${esc(m.name)}</b><div class="small muted">${esc(m.en)}${m.enabled?'':' · 사용 안 함'}</div></td><td style="white-space:nowrap">${esc(m.code)}</td><td style="white-space:nowrap">${esc(m.coverage)}</td><td style="white-space:nowrap">${esc(roomSel(m)==='both' ? S.settings.rooms.map(r=>r.name).join('·') : roomName(m.room))}</td><td style="white-space:nowrap">${m.min}분</td>
         <td class="small">${(m.fields||[]).map(f=>esc(f.label)+(f.req?' <b style="color:var(--bad)">*</b>':'')+(f.def?` <span class="muted">(${esc(f.def)})</span>`:'')+(f.hint?` <span class="muted">— ${esc(f.hint)}</span>`:'')).join('<br>')}</td>
         <td class="small">${esc(m.basis)}</td></tr>`).join('')}</tbody></table></div>
   </div>
@@ -1264,7 +1267,7 @@ function renderSettings(){
     ${mods().map(m=>`<tr data-mod="${m.id}"><td><input type="checkbox" data-k="enabled" ${m.enabled?'checked':''}></td>
       <td><input type="text" data-k="name" value="${esc(m.name)}"></td><td><input type="text" data-k="code" value="${esc(m.code)}" style="width:90px"></td>
       <td><select data-k="coverage">${['급여','비급여'].map(o=>`<option ${o===m.coverage?'selected':''}>${o}</option>`).join('')}</select></td>
-      <td><select data-k="room">${s.rooms.map(r=>`<option value="${r.id}" ${r.id===m.room?'selected':''}>${esc(r.name)}</option>`).join('')}</select></td>
+      <td><select data-k="room">${[...s.rooms.map(r=>[r.id, r.name]), ['both','둘 다 (두 치료실 모두)']].map(([id,nm])=>`<option value="${id}" ${id===roomSel(m)?'selected':''}>${esc(nm)}</option>`).join('')}</select></td>
       <td><input type="number" data-k="min" min="1" max="120" value="${m.min}" style="width:70px"></td>
       <td><input type="number" data-k="phase" min="1" max="5" value="${m.phase}" style="width:60px"></td>
       <td><select data-k="addRx">${Object.entries(ADDRX_LABEL).map(([k,v])=>`<option value="${k}" ${k===m.addRx?'selected':''}>${v}</option>`).join('')}</select></td></tr>`).join('')}
@@ -1936,7 +1939,7 @@ async function saveSettingsForm(){
   s.phrases={pre:lines('stPre'), during:lines('stDuring'), post:lines('stPost')};
   s.mods={};
   for(const tr of $$('#stModTable [data-mod]')){ const base=MODALITIES.find(m=>m.id===tr.dataset.mod), o={};
-    for(const el of $$('[data-k]',tr)){ const v = el.type==='checkbox'?el.checked : el.type==='number'?Math.max(1,parseInt(el.value)||1) : el.value.trim(); if(!base || v!==base[el.dataset.k]) o[el.dataset.k]=v; }
+    for(const el of $$('[data-k]',tr)){ const v = el.type==='checkbox'?el.checked : el.type==='number'?Math.max(1,parseInt(el.value)||1) : el.value.trim(); const bv = el.dataset.k==='room' && base ? roomSel(base) : base?.[el.dataset.k]; if(!base || v!==bv) o[el.dataset.k]=v; }
     if(Object.keys(o).length) s.mods[tr.dataset.mod]=o; }   // 기본값과 다른 것만 저장 → 프로그램 기본값이 바뀌면 자동 반영
   await run(Store.saveSettings(s)); S.settings=mergeSettings(s); chatFill(); toast('설정을 저장했습니다.'); render();
 }
