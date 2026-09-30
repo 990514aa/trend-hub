@@ -72,6 +72,14 @@ h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:14px 0 6px}
 .tile .pin{position:absolute;top:4px;right:4px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:11.5px;padding:1px 6px;color:var(--muted)}
 .tile .pin:hover{border-color:#f59e0b;color:#c2410c;background:#fff7ed}
 .tile.hold{border:1.5px solid #f59e0b;background:#fff7ed;padding-bottom:5px}
+/* 끌어서 옮기기 */
+.tile.run .tile-body,[data-act=pick]{cursor:grab}
+body.dragging,body.dragging *{cursor:grabbing!important;user-select:none}
+body.drag-any .tile.empty,body.drag-pt .tile.empty[data-room=pt],body.drag-ex .tile.empty[data-room=ex]{outline:2px dashed #16a34a;outline-offset:-3px}
+.tile.drop-ok{outline:3px solid #16a34a!important;background:#e7f7ec!important}
+.tile.drop-no{outline:3px solid var(--bad)!important;background:var(--bad-soft)!important}
+.tile.drag-src{opacity:.45}
+#dragGhost{position:fixed;z-index:200;pointer-events:none;background:var(--pri);color:#fff;padding:6px 12px;border-radius:999px;font-weight:700;font-size:13.5px;box-shadow:0 6px 16px rgba(0,0,0,.25);transform:translate(-50%,-130%)}
 .tile.run{border:1.5px solid #9db8f5;background:#fff;padding:0 0 5px}
 .tile.run.soon{border-color:var(--warn);background:var(--warn-soft)}
 .tile.run.over{border-color:var(--bad);background:var(--bad-soft);animation:pulse 1.2s infinite}
@@ -692,6 +700,7 @@ async function refresh(force){
     if(res.settings) S.settings = mergeSettings(res.settings);
     S.records = res.records||[]; S.version = res.version;
     setSync('', SYNC_OK);
+    if(drag && drag.on){ S.version=null; return; }   // 끌기 중에는 화면을 다시 그리지 않고 다음 주기에 반영
     if(S.tab==='board' || (S.tab==='ledger' && S.ledgerDate===S.date && !$$('.sel:checked').length)) render();
   }catch(e){ setSync('err', IS_SERVER?'메인 PC 연결 끊김 — 재시도 중':'연결 오류 — 재시도 중'); }
 }
@@ -1363,6 +1372,80 @@ async function loadPatientView(regNo){
 function shiftDate(s, n){ const d=new Date(s+'T00:00:00'); d.setDate(d.getDate()+n); return ymd(d); }
 
 document.addEventListener('pointerdown', unlockAudio, {capture:true});
+
+/* ===================== 끌어서 옮기기 =====================
+ * 치료 중인 베드 → 빈 베드: 베드 이동 / 대기 환자 → 빈 베드: 치료 시작 창
+ * 치료 중·준비 중 베드에 놓으면 안내만. 마우스는 바로 끌기, 터치는 길게 눌러(0.3초) 끌기 (스크롤과 구분) */
+let drag=null, suppressClick=false;
+function dragInfo(){
+  if(!drag) return null;
+  if(drag.kind==='rec'){ const r=S.records.find(x=>x.id===drag.id); return r&&r.status==='running'?{label:`${bedLabel(r)} ${r.name}`, room:r.room, rec:r}:null; }
+  const w=S.records.find(x=>x.id===drag.id); return w&&w.status==='waiting'?{label:w.name, room:null, rec:w}:null;
+}
+function dropCheck(tile, info){
+  if(!tile || !info) return null;
+  const room=tile.dataset.room, bed=+tile.dataset.bed, no=room==='ex'?`특수 ${bed}번`:`${bed}번`;
+  if(drag.kind==='rec' && tile.dataset.rid===drag.id) return {ok:false, silent:true};
+  if(info.room && room!==info.room) return {ok:false, msg:'다른 치료실 베드로는 옮길 수 없습니다.'};
+  if(tile.classList.contains('run')) return {ok:false, msg:`${no} 베드는 치료 중이라 ${drag.kind==='rec'?'이동':'배정'}할 수 없습니다.`};
+  if(tile.classList.contains('hold')) return {ok:false, msg:`${no} 베드는 다른 분이 준비 중(찜)이라 ${drag.kind==='rec'?'이동':'배정'}할 수 없습니다.`};
+  if(tile.classList.contains('empty')) return {ok:true, room, bed};
+  return null;
+}
+function dragStartVisual(){
+  const info=dragInfo(); if(!info){ drag=null; return; }
+  drag.on=true; document.body.classList.add('dragging', 'drag-'+(info.room||'any'));
+  drag.src?.classList.add('drag-src');
+  const g=document.createElement('div'); g.id='dragGhost'; g.textContent=info.label; document.body.appendChild(g); drag.ghost=g;
+  if(navigator.vibrate) try{ navigator.vibrate(15); }catch(e){}
+}
+function dragEnd(){
+  if(!drag) return;
+  clearTimeout(drag.timer); drag.ghost?.remove(); document.body.classList.remove('dragging','drag-pt','drag-ex','drag-any');
+  $$('.drop-ok,.drop-no,.drag-src').forEach(el=>el.classList.remove('drop-ok','drop-no','drag-src'));
+  drag=null;
+}
+document.addEventListener('pointerdown', ev=>{
+  if(ev.button!==0 || S.tab!=='board') return;
+  const t=ev.target.closest('.tile.run[data-rid] .tile-body'), w=ev.target.closest('[data-act=pick]');
+  if(!t && !w) return;
+  drag={kind:t?'rec':'wait', id:t?t.closest('.tile').dataset.rid:w.dataset.id, x:ev.clientX, y:ev.clientY, on:false, touch:ev.pointerType!=='mouse', src:t?t.closest('.tile'):w.closest('.item')};
+  if(drag.touch) drag.timer=setTimeout(()=>{ if(drag && !drag.on){ drag.armed=true; dragStartVisual(); } }, 300);
+});
+document.addEventListener('pointermove', ev=>{
+  if(!drag) return;
+  const moved=Math.hypot(ev.clientX-drag.x, ev.clientY-drag.y);
+  if(!drag.on){
+    if(drag.touch){ if(moved>8) dragEnd(); return; }   // 길게 누르기 전에 움직이면 스크롤로 보고 취소
+    if(moved<6) return; dragStartVisual(); if(!drag) return;
+  }
+  drag.ghost.style.left=ev.clientX+'px'; drag.ghost.style.top=ev.clientY+'px';
+  $$('.drop-ok,.drop-no').forEach(el=>el.classList.remove('drop-ok','drop-no'));
+  const tile=document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.tile');
+  const c=dropCheck(tile, dragInfo()); if(c && !c.silent) tile.classList.add(c.ok?'drop-ok':'drop-no');
+});
+// 터치: 드래그 중에는 화면 스크롤 막기
+document.addEventListener('touchmove', ev=>{ if(drag && drag.on) ev.preventDefault(); }, {passive:false});
+document.addEventListener('pointercancel', ()=>{ if(drag && !drag.on) dragEnd(); });
+document.addEventListener('pointerup', async ev=>{
+  if(!drag) return;
+  if(!drag.on){ dragEnd(); return; }
+  const info=dragInfo(), kind=drag.kind;
+  const tile=document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.tile');
+  const c=dropCheck(tile, info);
+  suppressClick=true; setTimeout(()=>suppressClick=false, 50);
+  dragEnd();
+  if(!c || c.silent) return;
+  if(!c.ok){ toast('⛔ '+c.msg, 'alarm', 3500); return; }
+  if(kind==='rec'){
+    if(!freeBeds(c.room).includes(c.bed)){ toast('⛔ 방금 다른 기기에서 사용하기 시작한 베드입니다.', 'alarm'); return; }
+    const r=withBase(info.rec); const from=bedLabel(r); r.bed=c.bed; await saveRecord(r); toast(`${from} → ${bedLabel(r)} 베드로 옮겼습니다.`);
+  } else {
+    S.room=c.room; S.pickWaiting=null; openStart(c.bed, info.rec);
+  }
+});
+// 끌기를 마친 직후의 클릭(베드 메뉴 열림 등)은 무시
+document.addEventListener('click', ev=>{ if(suppressClick){ ev.stopPropagation(); ev.preventDefault(); suppressClick=false; } }, true);
 document.addEventListener('click', async ev=>{
   const chip=ev.target.closest('[data-chip]'); if(chip){ chip.classList.toggle('on'); const d=$('#dlg'); if(d._upd) d._upd(); return; }
   const side=ev.target.closest('[data-side]'); if(side){ $$('[data-side]', side.parentElement).forEach(b=>b.classList.toggle('on',b===side)); $('#dlg')._upd?.(); return; }
