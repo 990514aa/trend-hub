@@ -1047,27 +1047,29 @@ function renderSettings(){
   const s=S.settings;
   const ph=k=>(phrases(k)).join('\n');
   return `
-  <div class="grid2">
+  <div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(290px,1fr))">
+    ${IS_SERVER?`<div class="panel" id="srvPanel" style="grid-column:1/-1"><h2>메인 PC 연결</h2><div class="muted small">불러오는 중…</div></div>`:''}
     <div class="panel">
       <h2>이 기기</h2>
       <label class="f"><span>병원 이름 (화면 위쪽에 표시 · 모든 기기 공통)</span><input type="text" id="stHospital" value="${esc(S.settings.hospital||'')}"></label>
       <label class="f"><span>치료 전 상태 고정 문구</span><input type="text" id="stFixedPre" value="${esc(S.settings.fixedPre||'')}"></label>
       <label class="f"><span>치료 후 상태 고정 문구</span><input type="text" id="stFixedPost" value="${esc(S.settings.fixedPost||'')}"></label>
       <label class="f"><span>기기 이름 (수정 이력에 표시)</span><input type="text" id="stDevice" value="${esc(S.local.device||'')}" placeholder="예: 물리치료실 PC1"></label>
-      <div class="row" style="margin-top:8px"><label class="row small"><input type="checkbox" id="stSound" ${S.local.sound?'checked':''}> 종료 알람 소리</label>
-      <label class="row small"><input type="checkbox" id="stVoice" ${S.local.voice?'checked':''}> 음성 안내 ("3번 베드 치료 종료")</label></div>
+      <label class="row small" style="margin-top:8px;flex-wrap:nowrap"><input type="checkbox" id="stSound" ${S.local.sound?'checked':''}> 종료 알람 소리</label>
+      <label class="row small" style="flex-wrap:nowrap"><input type="checkbox" id="stVoice" ${S.local.voice?'checked':''}> 음성 안내 ("3번 베드 치료 종료")</label>
       <p class="small muted">알람이 여러 기기에서 동시에 울리면 치료실 밖 기기는 소리를 꺼두세요. 음성 안내에는 환자 이름을 말하지 않습니다.</p>
       <button class="btn" data-act="testAlarm">알람 테스트</button>
     </div>
-    ${IS_SERVER?`<div class="panel" id="srvPanel" style="grid-column:1/-1"><h2>메인 PC 연결</h2><div class="muted small">불러오는 중…</div></div>`:''}
     <div class="panel">
       <h2>치료실 · 베드</h2>
-      ${s.rooms.map(r=>`<div class="row" style="margin-bottom:6px"><input type="text" data-room-name="${r.id}" value="${esc(r.name)}" class="grow"><input type="number" min="1" max="40" data-room-beds="${r.id}" value="${r.beds}" style="width:70px"> 베드 · 번호 <input type="number" min="1" max="99" data-room-first="${r.id}" value="${r.first||1}" style="width:64px">번부터</div>`).join('')}
+      ${s.rooms.map(r=>`<div class="row" style="margin-bottom:8px;flex-wrap:wrap"><input type="text" data-room-name="${r.id}" value="${esc(r.name)}" style="flex:1 1 100%"><input type="number" min="1" max="40" data-room-beds="${r.id}" value="${r.beds}" style="width:70px"> 베드 · 번호 <input type="number" min="1" max="99" data-room-first="${r.id}" value="${r.first||1}" style="width:64px">번부터</div>`).join('')}
       <p class="small muted" style="margin:4px 0 0">배치도: ${esc(s.rooms[0].name)} 1~10번은 위쪽 벽을 따라 2개씩, 11번부터는 아래 휴게실 옆 칸에 표시됩니다. ${esc(s.rooms[1].name)} 베드는 '특1, 특2…'로 배치도 아래에 표시됩니다.</p>
       <label class="row small" style="margin-top:6px"><input type="checkbox" id="stShowCode" ${s.showCode?'checked':''}> 기록문에 수가코드 표시</label>
     </div>
-    <div class="panel"><h2>처방의 명단</h2><textarea id="stDoctors" rows="5" placeholder="한 줄에 한 명">${esc(s.doctors.join('\n'))}</textarea></div>
-    <div class="panel"><h2>시행자(치료사) 명단</h2><textarea id="stTherapists" rows="5" placeholder="한 줄에 한 명">${esc(s.therapists.join('\n'))}</textarea></div>
+    <div class="panel"><h2>처방의 · 시행자 명단</h2>
+      <p class="small muted" style="margin:0 0 6px">한 줄에 한 명. 여기 있는 이름만 선택·저장됩니다.</p>
+      <label class="f"><span>처방의</span><textarea id="stDoctors" rows="4" placeholder="한 줄에 한 명">${esc(s.doctors.join('\n'))}</textarea></label>
+      <label class="f"><span>시행자(치료사)</span><textarea id="stTherapists" rows="4" placeholder="한 줄에 한 명">${esc(s.therapists.join('\n'))}</textarea></label></div>
   </div>
   <div class="panel" style="margin-top:12px">
     <h2>치료 항목</h2>
