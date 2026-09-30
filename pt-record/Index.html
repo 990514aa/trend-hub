@@ -33,6 +33,30 @@ nav.tabs button.on{background:var(--pri);color:#fff}
 .sync i{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
 .sync.err i{background:var(--bad)} .sync.busy i{background:var(--warn)}
 main{padding:14px 16px 60px;max-width:1500px;margin:0 auto}
+/* 치료실 채팅 — 넓은 화면: 오른쪽 빈 공간에 세로로 고정(본 화면 크기 그대로, 왼쪽으로만 살짝 이동) / 좁은 화면: 오른쪽 아래 버튼 → 떠 있는 창 */
+body.chat-dock main{margin-left:var(--mainL,auto);margin-right:0}
+#chat{position:fixed;z-index:30;right:12px;width:var(--chatW,320px);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 18px rgba(10,41,97,.08);overflow:hidden}
+body.chat-dock #chat{top:var(--chatTop,70px);bottom:12px}
+body:not(.chat-dock) #chat{bottom:72px;height:min(560px,calc(100vh - 150px));width:min(340px,calc(100vw - 24px));box-shadow:0 10px 30px rgba(10,41,97,.22)}
+#chat[hidden]{display:none}
+#chat .ch-h{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--pri);color:#fff}
+#chat .ch-h b{font-size:14px;flex:1}
+#chat .ch-h button{border:0;background:rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:1px 8px;font-size:13px}
+#chat .ch-who{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+#chat .ch-who select{flex:1;min-width:0;padding:2px 6px;font-size:13px}
+#chatList{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;background:#f7f8fb}
+#chatList .cm{max-width:88%;align-self:flex-start}
+#chatList .cm.me{align-self:flex-end;text-align:right}
+#chatList .cm .by{font-size:11px;color:var(--muted);margin:0 4px 1px}
+#chatList .cm .tx{display:inline-block;text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;padding:5px 9px;font-size:14px;white-space:pre-wrap;word-break:break-word}
+#chatList .cm.me .tx{background:var(--pri-soft);border-color:#c9d4e8}
+#chatList .day{align-self:center;font-size:11px;color:var(--muted)}
+#chat .ch-f{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+#chat .ch-f textarea{flex:1;min-width:0;resize:none;height:40px;padding:6px 8px;font-size:14px;border:1px solid var(--line);border-radius:8px}
+#chatBtn{position:fixed;z-index:30;right:16px;bottom:16px;border:0;border-radius:24px;background:var(--pri);color:#fff;font-weight:700;padding:10px 16px;box-shadow:0 6px 18px rgba(10,41,97,.3)}
+#chatBtn[hidden]{display:none}
+#chat .badge[hidden],#chatBtn .badge[hidden]{display:none}
+#chatBtn .badge,#chat .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--bad);color:#fff;font-size:12px;line-height:18px;text-align:center}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .grow{flex:1}
 .btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;font-weight:600}
@@ -168,7 +192,7 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
 .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:14px}
 .empty-note{padding:18px;text-align:center;color:var(--muted)}
 @media print{
-  header,nav,.no-print,.banner,#toast{display:none!important}
+  header,nav,.no-print,.banner,#toast,#chat,#chatBtn{display:none!important}
   body{background:#fff} main{padding:0}
   .hist{break-inside:avoid;border-color:#999}
 }
@@ -192,6 +216,13 @@ table.t tr.cancel td{color:var(--muted);text-decoration:line-through}
 <dialog id="dlg"></dialog>
 <dialog id="cfm" class="cfm"></dialog>
 <div id="toast"></div>
+<aside id="chat" hidden aria-label="치료실 채팅">
+  <div class="ch-h"><b>치료실 채팅</b><span class="badge" id="chatBadge2" hidden></span><button type="button" id="chatClose" title="접기">접기</button></div>
+  <div class="ch-who">보내는 사람 <select id="chatWho"></select></div>
+  <div id="chatList"><div class="day">오늘 대화가 여기에 표시됩니다</div></div>
+  <div class="ch-f"><textarea id="chatText" placeholder="메시지 입력 · Enter 전송" title="Enter 보내기 · Shift+Enter 줄바꿈" maxlength="500"></textarea><button type="button" class="btn pri" id="chatSend">보내기</button></div>
+</aside>
+<button type="button" id="chatBtn" hidden>채팅<span class="badge" id="chatBadge" hidden></span></button>
 
 <script>
 'use strict';
@@ -417,6 +448,8 @@ const GasStore = {
   saveSettings(s){ return this.call('saveSettings', s); },
   listRange(from, to){ return this.call('listRange', from, to); },
   audit(id){ return this.call('getAudit', id); },
+  chatList(date, after){ return this.call('chatList', date, after); },
+  chatSend(date, by, text){ return this.call('chatSend', date, by, text); },
 };
 const DB_KEY='ptrec.db.v1';
 const LocalStore = {
@@ -442,6 +475,12 @@ const LocalStore = {
   async saveSettings(s){ const db=this.db(); db.settings=s; this.put(db); return {settings:s}; },
   async listRange(from, to){ return Object.values(this.db().records).filter(r=>r.date>=from && r.date<=to); },
   async audit(id){ return this.db().audit.filter(a=>a.id===id); },
+  // 이 기기 단독 모드: 같은 브라우저의 다른 탭끼리만 공유
+  chatDb(){ try{ return JSON.parse(localStorage.getItem('ptrec.chat.v1'))||{}; }catch(e){ return {}; } },
+  async chatList(date, after){ return {msgs:(this.chatDb()[date]||[]).filter(m=>m.n>(+after||0))}; },
+  async chatSend(date, by, text){ text=String(text||'').trim().slice(0,500); if(!text) throw new Error('내용을 입력하세요.');
+    const db=this.chatDb(), l=db[date]=db[date]||[]; const m={n:(l.length?l[l.length-1].n:0)+1, ts:nowIso(), by:String(by||'').slice(0,30), text};
+    l.push(m); for(const k of Object.keys(db)) if(k<shiftDate(date,-30)) delete db[k]; db[date]=l.slice(-500); localStorage.setItem('ptrec.chat.v1', JSON.stringify(db)); return {msg:m}; },
 };
 // 메인 PC 서버(server.js / 물리치료기록.exe)에 접속한 경우
 const IS_SERVER = !IS_GAS && /^https?:$/.test(location.protocol);
@@ -474,6 +513,8 @@ const HttpStore = {
   saveSettings(s){ return this.call('saveSettings', s); },
   listRange(from, to){ return this.call('listRange', from, to); },
   audit(id){ return this.call('getAudit', id); },
+  chatList(date, after){ return this.call('chatList', date, after); },
+  chatSend(date, by, text){ return this.call('chatSend', date, by, text); },
 };
 const Store = IS_GAS ? GasStore : IS_SERVER ? HttpStore : LocalStore;
 const SYNC_OK = IS_GAS ? '구글 시트 동기화됨' : IS_SERVER ? '메인 PC와 동기화됨' : '이 기기에 저장';
@@ -749,12 +790,72 @@ async function refresh(force){
     // 조회하는 동안 이 기기에서 저장이 있었다면 옛 상태이므로 버리고 다음 주기에 다시 받음
     if(seq !== (S.writeSeq||0) || S.busy){ S.version=null; return; }
     if(res.same){ setSync('', SYNC_OK); return; }
-    if(res.settings) S.settings = mergeSettings(res.settings);
+    if(res.settings){ S.settings = mergeSettings(res.settings); chatFill(); }
     S.records = res.records||[]; S.version = res.version;
     setSync('', SYNC_OK);
     if(drag && drag.on){ S.version=null; return; }   // 끌기 중에는 화면을 다시 그리지 않고 다음 주기에 반영
     if(S.tab==='board' || (S.tab==='ledger' && S.ledgerDate===S.date && !$$('.sel:checked').length)) render();
   }catch(e){ setSync('err', IS_SERVER?'메인 PC 연결 끊김 — 재시도 중':'연결 오류 — 재시도 중'); }
+}
+
+/* ===================== 치료실 채팅 ===================== */
+const CHAT_W_MIN=250, CHAT_W_MAX=340, MAIN_MAX=1500;
+const chat = {date:null, after:0, msgs:[], unread:0, busy:false, open:false, loaded:false};
+function chatNames(){ return [...new Set([...(S.settings.therapists||[]), ...(S.settings.doctors||[]), S.local.device].filter(Boolean))]; }
+function chatMe(){ const names=chatNames(); return names.includes(S.local.chatName) ? S.local.chatName : (names[0]||'치료실'); }
+/** 화면 폭에 따라 오른쪽 고정(dock) / 떠 있는 창 결정. 본 화면(최대 1500px)의 크기는 바꾸지 않는다 */
+function chatLayout(){
+  const vw=document.documentElement.clientWidth, spare=vw-MAIN_MAX-24;
+  const dock = spare>=CHAT_W_MIN && !S.local.chatHidden;
+  document.body.classList.toggle('chat-dock', dock);
+  const root=document.documentElement.style;
+  if(dock){ const w=Math.min(CHAT_W_MAX, spare); root.setProperty('--chatW', w+'px'); root.setProperty('--mainL', Math.max(0, Math.floor((vw-MAIN_MAX-w-12)/2))+'px'); }
+  root.setProperty('--chatTop', (document.querySelector('header').getBoundingClientRect().height+12)+'px');
+  $('#chat').hidden = !(dock || chat.open);
+  $('#chatBtn').hidden = dock || chat.open;
+  if(!$('#chat').hidden){ chat.unread=0; chatBadge(); }
+}
+function chatBadge(){ for(const id of ['chatBadge','chatBadge2']){ const b=$('#'+id); b.textContent=chat.unread; b.hidden=!chat.unread; } }
+function chatFill(){ const sel=$('#chatWho'), me=chatMe(); sel.innerHTML=chatNames().map(n=>`<option ${n===me?'selected':''}>${esc(n)}</option>`).join('')||'<option>치료실</option>'; }
+function chatRender(stick){
+  const l=$('#chatList'); const atEnd = stick || l.scrollHeight-l.scrollTop-l.clientHeight<40; const me=chatMe();
+  l.innerHTML = chat.msgs.length ? chat.msgs.map(m=>`<div class="cm ${m.by===me?'me':''}"><div class="by">${m.by===me?'':esc(m.by||'')+' · '}${hm(m.ts)}</div><div class="tx">${esc(m.text)}</div></div>`).join('')
+    : '<div class="day">오늘 대화가 여기에 표시됩니다</div>';
+  if(atEnd) l.scrollTop=l.scrollHeight;
+}
+async function chatPoll(){
+  if(chat.busy || !Store.chatList) return;
+  if(chat.date!==S.date){ chat.date=S.date; chat.after=0; chat.msgs=[]; chat.loaded=false; chatRender(true); }
+  chat.busy=true;
+  try{
+    const {msgs=[]} = await Store.chatList(chat.date, chat.after);
+    const fresh=msgs.filter(m=>m.n>chat.after);
+    if(fresh.length){
+      const first=!chat.loaded; chat.msgs.push(...fresh); chat.after=fresh[fresh.length-1].n; chatRender(first);
+      const others=fresh.filter(m=>m.by!==chatMe()).length;
+      if(!first && others){ if($('#chat').hidden){ chat.unread+=others; chatBadge(); } chatDing(); }
+    }
+    chat.loaded=true;
+  }catch(e){} finally{ chat.busy=false; }
+}
+function chatDing(){ if(!S.local.sound || !actx) return; const t=actx.currentTime, o=actx.createOscillator(), g=actx.createGain(); o.frequency.value=1320; o.connect(g); g.connect(actx.destination);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.12,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.25); o.start(t); o.stop(t+0.26); }
+async function chatSend(){
+  const ta=$('#chatText'), text=ta.value.trim(); if(!text) return;
+  ta.value=''; ta.focus();
+  try{ await Store.chatSend(S.date, chatMe(), text); await chatPoll(); chatRender(true); }
+  catch(e){ ta.value=text; toast('메시지를 보내지 못했습니다 — '+(e.message||e), 'alarm'); }
+}
+function chatInit(){
+  chatFill(); chatLayout();
+  window.addEventListener('resize', chatLayout);
+  $('#chatWho').addEventListener('change', e=>{ S.local.chatName=e.target.value; saveLocal(); chatRender(); });
+  $('#chatSend').addEventListener('click', chatSend);
+  $('#chatText').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing && e.keyCode!==229){ e.preventDefault(); chatSend(); } });
+  $('#chatBtn').addEventListener('click', ()=>{ unlockAudio(); chat.open=true; if(S.local.chatHidden){ S.local.chatHidden=false; saveLocal(); } chatLayout(); chatRender(true); $('#chatText').focus(); });
+  $('#chatClose').addEventListener('click', ()=>{ chat.open=false; if(document.body.classList.contains('chat-dock')){ S.local.chatHidden=true; saveLocal(); } chatLayout(); });
+  window.addEventListener('storage', e=>{ if(e.key==='ptrec.chat.v1') chatPoll(); });
+  chatPoll(); setInterval(()=>{ if(!document.hidden) chatPoll(); }, IS_GAS?6000:2000);
 }
 
 /* ===================== 알림 ===================== */
@@ -1833,7 +1934,7 @@ async function saveSettingsForm(){
   for(const tr of $$('#stModTable [data-mod]')){ const base=MODALITIES.find(m=>m.id===tr.dataset.mod), o={};
     for(const el of $$('[data-k]',tr)){ const v = el.type==='checkbox'?el.checked : el.type==='number'?Math.max(1,parseInt(el.value)||1) : el.value.trim(); if(!base || v!==base[el.dataset.k]) o[el.dataset.k]=v; }
     if(Object.keys(o).length) s.mods[tr.dataset.mod]=o; }   // 기본값과 다른 것만 저장 → 프로그램 기본값이 바뀌면 자동 반영
-  await run(Store.saveSettings(s)); S.settings=mergeSettings(s); toast('설정을 저장했습니다.'); render();
+  await run(Store.saveSettings(s)); S.settings=mergeSettings(s); chatFill(); toast('설정을 저장했습니다.'); render();
 }
 
 /* ===================== 시작 ===================== */
@@ -1855,6 +1956,7 @@ async function saveSettingsForm(){
   }catch(e){ $('#main').innerHTML='<div class="empty-note">데이터를 불러오지 못했습니다. 새로고침해 주세요.</div>'; return; }
   if(!S.settings.therapists.length && !S.settings.doctors.length) toast('[설정]에서 처방의·치료사 명단을 먼저 입력하세요.', '', 6000);
   render();
+  chatInit();
   setInterval(tick, 1000);
   setInterval(()=>{ if(ymd()!==S.date){ S.date=ymd(); S.ledgerDate=S.date; S.version=null; } if(!document.hidden) refresh(); }, IS_GAS?8000:IS_SERVER?3000:3000);
   window.addEventListener('storage', e=>{ if(e.key===DB_KEY) refresh(); });

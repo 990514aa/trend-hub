@@ -54,6 +54,25 @@ function api(method, argsJson) {
 }
 
 var API_ = {
+  /** 치료실 채팅 — '채팅' 시트 (날짜, 번호, 시각, 보낸 사람, 내용) */
+  chatList: function (date, after) {
+    var sh = sheet_('채팅', ['date', 'n', 'ts', 'by', 'text']), last = sh.getLastRow();
+    if (last < 2) return { msgs: [] };
+    var start = Math.max(2, last - 499), vals = sh.getRange(start, 1, last - start + 1, 5).getValues(), out = [];
+    for (var i = 0; i < vals.length; i++) if (String(vals[i][0]) === String(date) && Number(vals[i][1]) > (Number(after) || 0))
+      out.push({ n: Number(vals[i][1]), ts: String(vals[i][2]), by: String(vals[i][3]), text: String(vals[i][4]) });
+    return { msgs: out };
+  },
+  chatSend: function (date, by, text) {
+    text = String(text || '').trim().slice(0, 500); if (!text) return { error: '내용을 입력하세요.' };
+    return withLock_(function () {
+      var sh = sheet_('채팅', ['date', 'n', 'ts', 'by', 'text']), last = sh.getLastRow(), n = 1;
+      if (last >= 2) n = Number(sh.getRange(last, 2).getValue()) + 1;
+      var m = { n: n, ts: new Date().toISOString(), by: String(by || '').slice(0, 30), text: text };
+      appendRow_(sh, [String(date), String(n), m.ts, m.by, m.text]);
+      return { msg: m };
+    });
+  },
   bootstrap: function (date) {
     return { settings: getSettings_(), records: boardRecords_(date), version: version_() };
   },

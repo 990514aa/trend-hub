@@ -220,6 +220,18 @@ const API = {
     writeJSON(P('patients.json'), pats); return { patient: pats[p.regNo] };
   },
   saveSettings(s) { writeJSON(P('settings.json'), s); bump(); return { settings: s }; },
+  /** 치료실 채팅 — 날짜별 파일(chat/YYYY-MM-DD.json), after 보다 뒤 메시지만 */
+  chatList(date, after) {
+    const list = readJSON(P('chat', String(date).slice(0, 10) + '.json'), []);
+    return { msgs: list.filter(m => m.n > (+after || 0)) };
+  },
+  chatSend(date, by, text) {
+    text = String(text || '').trim().slice(0, 500); if (!text) return { error: '내용을 입력하세요.' };
+    const f = P('chat', String(date).slice(0, 10) + '.json'), list = readJSON(f, []);
+    const m = { n: (list.length ? list[list.length - 1].n : 0) + 1, ts: new Date().toISOString(), by: String(by || '').slice(0, 30), text };
+    list.push(m); writeJSON(f, list.slice(-500));
+    return { msg: m };
+  },
   listRange(from, to) {
     const out = [];
     for (const m of monthsBetween(from, to)) for (const r of Object.values(recMonth(m))) if (r.date >= from && r.date <= to) out.push(r);
