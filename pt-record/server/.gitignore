@@ -1,0 +1,5 @@
+# 실행 시 생기는 설정·환자 데이터 — 절대 커밋 금지
+config.json
+data/
+dist/
+*.blob
