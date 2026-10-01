@@ -1386,7 +1386,7 @@ async function openStart(bed, waitingRec){
       <label class="f req"><span>등록번호</span><div class="ac"><input type="text" id="sRegNo" value="${esc(w.regNo||'')}" autocomplete="off" inputmode="numeric"><div class="ac-list" id="sAc" hidden></div></div></label>
       <label class="f req"><span>이름</span><input type="text" id="sName" value="${esc(w.name||'')}"></label>
       <label class="f"><span>구분</span><div class="row" style="flex-wrap:nowrap"><select id="sVisit"><option>외래</option><option>입원</option></select><select id="sIns" title="보험 구분">${INS.map(o=>`<option ${o===(w.ins||'건강보험')?'selected':''}>${o}</option>`).join('')}</select></div></label>
-      <label class="f"><span>시작 시각</span><input type="time" id="sStart" value="${hm(nowIso())}"></label>
+      <label class="f"><span>시작 시각</span><input type="time" id="sStart" value="${hm(nowIso())}" data-def="${hm(nowIso())}"></label>
     </div>
     <div id="sPlanNote" class="small muted" style="min-height:1.5em"></div>
     <div><div class="small muted" style="margin-bottom:4px">빠른 선택</div><div class="chips">${presetsOf(room).map((p,i)=>p.items.every(id=>MOD(id)?.enabled&&inRoom(MOD(id),room))?`<button type="button" class="chip" data-act="preset" data-i="${i}" title="${esc(presetSummary(p))}"><span class="dots">${modDots(p.items)}</span>${esc(p.name)}</button>`:'').join('')}
@@ -1513,7 +1513,9 @@ async function doStart(bed, wid){
   if(errs.length){ $('#sWarn').innerHTML=`<div class="errbox">${errs.join(', ')}을(를) 입력하세요.</div>`; return; }
   if(S.records.some(r=>['running','hold'].includes(r.status) && r.id!==wid && r.date===S.date && r.room===S.room && +r.bed===+bed)){ $('#sWarn').innerHTML='<div class="errbox">이미 사용 중이거나 다른 사람이 준비 중인 베드입니다.</div>'; return; }
   if(S.records.some(r=>r.status==='running' && r.regNo===regNo) && !confirm('이 환자는 다른 베드에서 치료 중입니다. 계속할까요?')) return;
-  const t=setTime(nowIso(), $('#sStart').value||hm(nowIso()));
+  // 시작 시각 칸을 손대지 않았으면 [치료 시작]을 누른 순간(초 단위)을 기준으로, 직접 바꿨으면 그 시각(분)으로
+  const sv=$('#sStart').value;
+  const t=(!sv || sv===$('#sStart').dataset.def) ? nowIso() : setTime(nowIso(), sv);
   const first=Math.min(...items.map(i=>i.phase)); items.forEach(i=>{ if(i.phase===first) i.start=t; });
   schedule({items});   // 뒤 순서 시작 시각 미리 계산
   const plan=d._plan||{};
@@ -1605,8 +1607,9 @@ function collectEdit(){
     const box=$(`[data-emod="${it.mid}"]`); if(!box) continue;
     for(const el of $$('[data-p]',box)){ it.params[el.dataset.k] = el.dataset.multi ? readChips(el) : el.value.trim(); }
     const ts=$('[data-t=start]',box), te=$('[data-t=end]',box);
-    if(ts&&ts.value&&it.start) it.start=setTime(it.start, ts.value);
-    if(te&&it.start){ it.end = te.value ? setTime(it.start, te.value) : (r.status==='running'?it.end:null); if(it.end && it.end<it.start) it.end=it.start; }
+    // 화면에는 분까지만 보이므로, 바꾸지 않은 시각은 원래 값(초 포함)을 그대로 둔다
+    if(ts&&ts.value&&it.start&&ts.value!==hm(it.start)) it.start=setTime(it.start, ts.value);
+    if(te&&it.start){ it.end = te.value ? (it.end && te.value===hm(it.end) ? it.end : setTime(it.start, te.value)) : (r.status==='running'?it.end:null); if(it.end && it.end<it.start) it.end=it.start; }
   }
   if(r.status==='running'){ schedule(r); }
   if(r.status==='running' && r.date!==S.date && r.items.every(i=>i.end)) r.status='ended';
