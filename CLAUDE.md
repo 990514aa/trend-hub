@@ -31,7 +31,9 @@
 
 ```
 server.js          # 수집 + API + SSE + 정적 서빙 전부 (zero-dependency)
+game-ws.js         # 게임 협동 멀티용 WebSocket 중계 (zero-dependency, /game/ws)
 public/            # index.html, app.js, app.css, sw.js, manifest.webmanifest, icons/
+public/game/       # 카피바라 온천 귀환 (index.html 한 파일 + img/) — 트렌드 기능과 독립
 deploy.sh          # push + Render 배포 트리거
 data/posts.json    # 공유 게시판 (gitignore, 서버 재시작 시 초기화될 수 있음)
 ```
@@ -45,6 +47,17 @@ data/posts.json    # 공유 게시판 (gitignore, 서버 재시작 시 초기화
 | X | `trends24.in/{korea,united-states,japan}` 파싱 | |
 | 틱톡 | `tikwm.com/api/feed/list?region=` | 서드파티 미러 |
 | 스레드 | 없음 — 핫키워드 → 스레드 검색 링크 | 공개 트렌드 API가 존재하지 않음 |
+
+## 게임 (/game/)
+
+트렌드 허브와 같은 서버에 얹혀 있는 별개 기능. 탑다운 익스트랙션 슈터 "카피바라 온천 귀환".
+
+- 접속: `/game/` — 방 코드로 2~4인 협동(`/game/#방코드` 가 초대 링크). 연결하지 않으면 혼자 플레이
+- 시뮬레이션은 브라우저가 한다. 서버(`game-ws.js`)는 방 단위 중계 + 전리품 줍기 판정 + 구역별 호스트 지정만 담당
+- 구역마다 먼저 들어온 사람이 호스트(적 AI 담당), 나가면 다음 사람이 이어받음
+- 저장(돈·창고·의뢰)은 각자 브라우저 localStorage. 서버에는 아무것도 저장하지 않음
+- 서비스워커는 `/game` 경로를 캐시하지 않는다 (항상 최신 파일)
+- 로컬 확인: `node server.js` 후 브라우저 두 개로 `http://localhost:4173/game/#TEST`
 
 ## 하지 말 것
 

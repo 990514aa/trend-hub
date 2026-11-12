@@ -18,6 +18,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname === '/api/stream') return; // SSE는 건드리지 않음
+  if (url.pathname.startsWith('/game')) return; // 게임은 항상 최신 파일을 받는다
 
   if (url.pathname.startsWith('/api/')) {
     // 네트워크 우선, 실패 시 캐시된 마지막 응답
