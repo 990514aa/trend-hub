@@ -1,0 +1,1447 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14170f">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>카피바라 온천 귀환</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+<style>
+/* Layout: slim field HUD on top, raid map fills the rest; the camp and the loot screen are panels over the map. */
+:root {
+  color-scheme: dark;
+  --soil: #14170f; --panel: #1f2418; --cell: #262c1d; --line: #3a4230;
+  --text: #ece6d2; --muted: #a3a58c;
+  --yuzu: #f2a531; --moss: #8fb85a; --blood: #d9553f; --steam: #7fd0c4;
+  --r1: #6fae5c; --r2: #5c9bd6; --r3: #e0b040;
+  --display: "Do Hyeon", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+html, body { height: 100%; }
+body {
+  background: var(--soil); color: var(--text); font-family: var(--body); font-size: 14px;
+  display: flex; flex-direction: column; gap: 8px; padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+.hud { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-variant-numeric: tabular-nums; }
+.hud h1 { font-family: var(--display); font-weight: 400; font-size: 20px; margin: 0; color: var(--yuzu); }
+.bars { flex: 1 1 130px; min-width: 110px; max-width: 230px; display: flex; flex-direction: column; gap: 3px; }
+.bar { height: 11px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.bar.thin { height: 5px; }
+.bar i { display: block; height: 100%; width: 100%; background: var(--moss); }
+#stFill { background: var(--steam); }
+.stat { color: var(--muted); white-space: nowrap; }
+.stat b { color: var(--text); font-weight: 600; }
+.acts { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; }
+button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--yuzu); }
+button:focus-visible { outline: 2px solid var(--yuzu); outline-offset: 2px; }
+button:disabled { opacity: 0.45; cursor: default; }
+.stage { position: relative; flex: 1; min-height: 0; border-radius: 12px; overflow: hidden; background: #0a0c08; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: none; }
+.toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(20,23,15,0.88); border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; pointer-events: none; max-width: 90%; text-align: center; z-index: 3; }
+.inv { position: absolute; inset: 0; overflow-y: auto; background: rgba(14,16,10,0.94); padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; z-index: 2; }
+.inv.raid { background: rgba(14,16,10,0.86); }
+.inv-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.inv-h h2 { font-family: var(--display); font-weight: 400; font-size: 26px; margin: 0; color: var(--yuzu); }
+.inv-h .money { font-size: 16px; font-variant-numeric: tabular-nums; }
+.inv-h .sp { flex: 1; }
+.go { font-family: var(--display); font-size: 18px; padding: 8px 26px; background: var(--yuzu); color: var(--soil); border-color: var(--yuzu); }
+.go:hover:not(:disabled) { background: var(--text); border-color: var(--text); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button.on { border-color: var(--yuzu); color: var(--yuzu); }
+.report { border-left: 3px solid var(--moss); padding: 2px 0 2px 12px; line-height: 1.6; }
+.report.lost { border-color: var(--blood); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+.cols section { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.cols h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; }
+.cell { position: relative; aspect-ratio: 1; min-width: 0; padding: 4px 3px 3px; background: var(--cell); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 1px; overflow: hidden; color: var(--text); }
+div.cell { color: var(--muted); font-size: 11px; justify-content: center; text-align: center; opacity: 0.7; }
+.cell img { flex: 1; min-height: 0; max-width: 92%; object-fit: contain; }
+.cell .nm { font-size: 10px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.cell .q { position: absolute; top: 2px; right: 4px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+.cell .tag { position: absolute; top: 2px; left: 4px; font-size: 10px; color: var(--yuzu); text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; }
+.cell .dur { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--moss); }
+.cell.r1 { border-color: var(--r1); } .cell.r2 { border-color: var(--r2); } .cell.r3 { border-color: var(--r3); }
+.cell.g1 { border-color: #5c9bd6; } .cell.g2 { border-color: #a678e0; } .cell.g3 { border-color: #e0b040; } .cell.g4 { border-color: #ff6a4a; box-shadow: inset 0 0 10px rgba(255,106,74,0.35); }
+.cell.g2, .cell.g3 { box-shadow: inset 0 0 8px rgba(166,120,224,0.22); }
+.gt1 { color: #7fb4e8; } .gt2 { color: #bb93ee; } .gt3 { color: #e8bd55; } .gt4 { color: #ff8566; }
+.cell.on { outline: 2px solid var(--yuzu); outline-offset: 1px; }
+.fx-ap { filter: hue-rotate(250deg) saturate(1.4); } .fx-shell { filter: hue-rotate(290deg) saturate(1.3); }
+.fx-heavy { filter: hue-rotate(120deg); } .fx-dark { filter: brightness(0.6) contrast(1.25); }
+.detail { position: sticky; bottom: 0; margin: 0 -16px; padding: 10px 16px; background: var(--panel); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 30px; }
+.detail .info { flex: 1 1 220px; min-width: 0; line-height: 1.5; }
+.detail .info small { display: block; color: var(--muted); }
+.detail .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.row div { flex: 1; min-width: 0; }
+.row small { display: block; color: var(--muted); }
+.row.done { opacity: 0.5; }
+.keys { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0; }
+.mods { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mods .slot { color: var(--muted); font-size: 12px; padding: 4px 8px; border: 1px dashed var(--line); border-radius: 8px; }
+.mods button.in { border-color: var(--r2); }
+.net { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.net input { font: inherit; color: var(--text); background: var(--cell); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; width: 110px; min-width: 0; }
+.net input:focus-visible { outline: 2px solid var(--yuzu); outline-offset: 1px; }
+.net small { color: var(--muted); flex: 1 1 200px; min-width: 0; line-height: 1.5; }
+.net .who { flex: 1 1 200px; min-width: 0; line-height: 1.6; }
+.net .who b { color: var(--yuzu); }
+.npc { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.npc img { width: 64px; height: 64px; object-fit: contain; flex: none; }
+.npc div { min-width: 0; line-height: 1.5; }
+.npc small { display: block; color: var(--muted); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes drop { from { opacity: 0; transform: translate(-50%, -8px); } }
+.inv { animation: rise 0.16s ease-out; }
+.toast { animation: drop 0.18s ease-out; }
+.bar i { transition: width 0.18s ease-out; }
+.cell { transition: transform 0.1s ease-out, border-color 0.1s; }
+button.cell:hover { transform: translateY(-2px); }
+button.cell:active { transform: scale(0.95); }
+@media (prefers-reduced-motion: reduce) { .inv, .toast { animation: none; } .bar i, .cell { transition: none; } }
+</style>
+
+</head>
+<body>
+<div class="hud">
+  <h1>카피바라 온천 귀환</h1>
+  <div class="bars">
+    <div class="bar" aria-label="체력"><i id="hpFill"></i></div>
+    <div class="bar thin" aria-label="기력"><i id="stFill"></i></div>
+  </div>
+  <span class="stat">방어 <b id="armor">-</b></span>
+  <span class="stat"><b id="gun">-</b></span>
+  <span class="stat">무게 <b id="wt">-</b></span>
+  <span class="stat">시간 <b id="clock">0:00</b></span>
+  <div class="acts">
+    <button id="btnUse" type="button">열기 F</button>
+    <button id="btnBag" type="button">가방 Tab</button>
+    <button id="btnSwap" type="button">교체 1/2</button>
+    <button id="btnReload" type="button">장전 R</button>
+    <button id="btnMed" type="button">치료 Q</button>
+    <button id="btnRoll" type="button">구르기</button>
+    <button id="btnPing" type="button">핑 G</button>
+    <button id="btnSnd" type="button">소리 켬</button>
+  </div>
+</div>
+
+<div class="stage">
+  <canvas id="cv" aria-label="작전 지도"></canvas>
+  <div class="toast" id="toast" hidden></div>
+  <div class="inv" id="inv"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var fog = document.createElement('canvas'), fctx = fog.getContext('2d');
+  var $ = function (id) { return document.getElementById(id); };
+  var inv = $('inv'), toastEl = $('toast');
+
+  /* ---------- data ---------- */
+  var DB = {
+    pistol: { n: '늪지 권총', t: 'gun', cls: 'HG', ic: 'pistol', w: 1, price: 300, r: 0, cal: 'light', dmg: 19, rate: 0.26, mag: 10, spread: 0.05, spd: 900, reload: 1.1, auto: 0, pel: 1, slots: ['muzzle', 'sight', 'mag'] },
+    smg: { n: '갈대 기관단총', t: 'gun', cls: 'SMG', ic: 'smg', w: 2.5, price: 1000, r: 1, cal: 'light', dmg: 14, rate: 0.085, mag: 28, spread: 0.085, spd: 900, reload: 1.5, auto: 1, pel: 1, slots: ['muzzle', 'sight', 'mag', 'grip'] },
+    shotgun: { n: '진흙 산탄총', t: 'gun', cls: 'SG', ic: 'shotgun', w: 3.5, price: 1200, r: 1, cal: 'shell', dmg: 11, rate: 0.8, mag: 5, spread: 0.19, spd: 800, reload: 2.1, auto: 0, pel: 7, slots: ['muzzle', 'sight', 'grip'] },
+    rifle: { n: '유자 소총', t: 'gun', cls: 'AR', ic: 'rifle', w: 3.5, price: 2600, r: 2, cal: 'heavy', dmg: 27, rate: 0.125, mag: 25, spread: 0.035, spd: 1050, reload: 1.7, auto: 1, pel: 1, slots: ['muzzle', 'sight', 'mag', 'grip'] },
+    sniper: { n: '왜가리 저격총', t: 'gun', cls: 'SR', ic: 'sniper', w: 5, price: 3800, r: 3, cal: 'heavy', dmg: 95, rate: 1.15, mag: 5, spread: 0.004, spd: 1600, reload: 2.4, auto: 0, pel: 1, slots: ['muzzle', 'sight', 'mag'] },
+    revolver: { n: '물총새 리볼버', t: 'gun', cls: 'HG', ic: 'revolver', w: 1.2, price: 900, r: 1, cal: 'heavy', dmg: 46, rate: 0.5, mag: 6, spread: 0.03, spd: 1000, reload: 2.0, auto: 0, pel: 1, slots: ['sight'] },
+    smg2: { n: '수달 기관단총', t: 'gun', cls: 'SMG', ic: 'smg2', w: 2.8, price: 1500, r: 1, cal: 'light', dmg: 18, rate: 0.1, mag: 25, spread: 0.07, spd: 950, reload: 1.6, auto: 1, pel: 1, slots: ['muzzle', 'sight', 'mag', 'grip'] },
+    sg2: { n: '두꺼비 자동산탄총', t: 'gun', cls: 'SG', ic: 'sg2', w: 4, price: 2400, r: 2, cal: 'shell', dmg: 10, rate: 0.32, mag: 8, spread: 0.21, spd: 800, reload: 2.6, auto: 0, pel: 7, slots: ['muzzle', 'sight', 'grip'] },
+    ar2: { n: '맹그로브 돌격소총', t: 'gun', cls: 'AR', ic: 'ar2', w: 3.8, price: 3400, r: 2, cal: 'heavy', dmg: 33, rate: 0.15, mag: 30, spread: 0.04, spd: 1050, reload: 1.9, auto: 1, pel: 1, slots: ['muzzle', 'sight', 'mag', 'grip'] },
+    dmr: { n: '백로 지정사수총', t: 'gun', cls: 'DMR', ic: 'dmr', w: 4, price: 3000, r: 2, cal: 'heavy', dmg: 48, rate: 0.3, mag: 12, spread: 0.012, spd: 1300, reload: 1.9, auto: 0, pel: 1, slots: ['muzzle', 'sight', 'mag', 'grip'] },
+    dmr2: { n: '물수리 지정사수총', t: 'gun', cls: 'DMR', ic: 'dmr', fx: 'fx-dark', w: 4.4, price: 4200, r: 3, cal: 'heavy', dmg: 60, rate: 0.38, mag: 10, spread: 0.008, spd: 1400, reload: 2.1, auto: 0, pel: 1, slots: ['muzzle', 'sight', 'mag', 'grip'] },
+    sr2: { n: '황새 대물저격총', t: 'gun', cls: 'SR', ic: 'sniper', fx: 'fx-dark', w: 6.5, price: 5600, r: 3, cal: 'heavy', dmg: 150, rate: 1.5, mag: 3, spread: 0.002, spd: 1800, reload: 2.8, auto: 0, pel: 1, slots: ['muzzle', 'sight', 'mag'] },
+    lmg: { n: '하마 경기관총', t: 'gun', cls: 'LMG', ic: 'lmg', w: 7.5, price: 4800, r: 3, cal: 'heavy', dmg: 24, rate: 0.09, mag: 80, spread: 0.075, spd: 1000, reload: 4.2, auto: 1, pel: 1, slots: ['muzzle', 'sight', 'grip'] },
+    a_light: { n: '경량탄', t: 'ammo', ic: 'ammo', w: 0.02, price: 3, r: 0, cal: 'light', pen: 0, stack: 60 },
+    a_light_ap: { n: '경량 철갑탄', t: 'ammo', ic: 'ammo', fx: 'fx-ap', w: 0.02, price: 8, r: 1, cal: 'light', pen: 0.6, stack: 60 },
+    a_heavy: { n: '중량탄', t: 'ammo', ic: 'ammo', fx: 'fx-heavy', w: 0.03, price: 5, r: 0, cal: 'heavy', pen: 0.15, stack: 60 },
+    a_heavy_ap: { n: '중량 철갑탄', t: 'ammo', ic: 'ammo', fx: 'fx-ap', w: 0.03, price: 12, r: 2, cal: 'heavy', pen: 0.75, stack: 60 },
+    a_shell: { n: '산탄', t: 'ammo', ic: 'ammo', fx: 'fx-shell', w: 0.05, price: 6, r: 0, cal: 'shell', pen: 0, stack: 20 },
+    vest1: { n: '가죽 조끼', t: 'armor', ic: 'vest1', w: 2, price: 600, r: 0, red: 0.25, dur: 40, lv: 1 },
+    vest2: { n: '강판 조끼', t: 'armor', ic: 'vest2', w: 5, price: 1800, r: 1, red: 0.42, dur: 75, lv: 2 },
+    vest3: { n: '중장 방탄복', t: 'armor', ic: 'vest2', fx: 'fx-dark', w: 8, price: 4200, r: 3, red: 0.58, dur: 120, lv: 3 },
+    helm1: { n: '바가지 투구', t: 'helmet', ic: 'helm1', w: 0.8, price: 400, r: 0, red: 0.08, dur: 25, lv: 1 },
+    helm2: { n: '강철 헬멧', t: 'helmet', ic: 'helm2', w: 1.8, price: 1500, r: 2, red: 0.16, dur: 55, lv: 2 },
+    pack1: { n: '보따리', t: 'pack', ic: 'pack1', w: 0.5, price: 350, r: 0, slots: 6, carry: 6 },
+    pack2: { n: '야전 가방', t: 'pack', ic: 'pack2', w: 1.2, price: 1400, r: 1, slots: 12, carry: 12 },
+    pack3: { n: '원정 배낭', t: 'pack', ic: 'pack3', w: 2, price: 3400, r: 2, slots: 18, carry: 20 },
+    bandage: { n: '붕대', t: 'med', ic: 'bandage', w: 0.2, price: 90, r: 0, heal: 30, use: 1.4, stack: 5 },
+    medkit: { n: '구급상자', t: 'med', ic: 'medkit', w: 1, price: 420, r: 1, heal: 85, use: 2.8, stack: 2 },
+    corn: { n: '옥수수 통조림', t: 'val', ic: 'corn', w: 0.5, price: 120, r: 0 },
+    yuzu: { n: '유자', t: 'val', ic: 'yuzu', w: 0.3, price: 160, r: 0 },
+    wire: { n: '구리 전선', t: 'val', ic: 'wire', w: 1.5, price: 260, r: 1 },
+    soap: { n: '온천 비누', t: 'val', ic: 'soap', w: 0.4, price: 420, r: 1 },
+    radio: { n: '낡은 라디오', t: 'val', ic: 'radio', w: 2.5, price: 800, r: 2 },
+    key: { n: '황금 열쇠', t: 'val', ic: 'key', w: 0.2, price: 1800, r: 3 },
+    m_supp: { n: '소음기', t: 'mod', slot: 'muzzle', ic: 'm_supp', w: 0.4, price: 1400, r: 2, e: { noise: 0.3, dmg: 0.95 }, desc: '총소리가 퍼지는 범위 -70%, 피해 -5%' },
+    m_scope: { n: '조준경', t: 'mod', slot: 'sight', ic: 'm_scope', w: 0.5, price: 1600, r: 2, e: { spread: 0.6, spd: 1.15, vr: 90 }, desc: '탄 퍼짐 -40%, 탄속 +15%, 시야 거리 증가' },
+    m_dot: { n: '도트 사이트', t: 'mod', slot: 'sight', ic: 'm_dot', w: 0.2, price: 700, r: 1, e: { spread: 0.85, bloom: 0.55 }, desc: '탄 퍼짐 -15%, 연사 시 벌어짐 -45%' },
+    m_extmag: { n: '확장 탄창', t: 'mod', slot: 'mag', ic: 'm_extmag', w: 0.4, price: 800, r: 1, e: { mag: 1.5 }, desc: '탄창 용량 +50%' },
+    m_fastmag: { n: '속사 탄창', t: 'mod', slot: 'mag', ic: 'm_fastmag', w: 0.3, price: 900, r: 1, e: { reload: 0.65, mag: 1.15 }, desc: '장전 시간 -35%, 탄창 용량 +15%' },
+    m_grip: { n: '수직 손잡이', t: 'mod', slot: 'grip', ic: 'm_grip', w: 0.3, price: 750, r: 1, e: { move: 0.35, kick: 0.7 }, desc: '이동 사격 퍼짐 -65%, 반동 -30%' }
+  };
+  var RNG = Math.random;
+  var CLSN = { HG: 'HG 권총', SMG: 'SMG 기관단총', SG: 'SG 산탄총', AR: 'AR 돌격소총', DMR: 'DMR 지정사수소총', SR: 'SR 저격소총', LMG: 'LMG 경기관총' };
+  var GRN = ['노말', '레어', '에픽', '유니크', '레전드'], GD = [1, 1.1, 1.2, 1.32, 1.45], GS = [1, 0.95, 0.9, 0.85, 0.8], GR = [1, 0.97, 0.94, 0.9, 0.85], GM = [1, 1, 1.1, 1.15, 1.25], GP = [0, 0, 0, 0.15, 0.3], GPRICE = [1, 1.6, 2.6, 4.5, 8];
+  var GTR = [null, null, '#c9a2ff', '#ffd24a', '#ff7a4a'], GRW = [[70, 24, 5, 1, 0], [40, 35, 18, 6, 1], [15, 32, 30, 17, 6]];
+  function rollGrade(z, min) { var w = GRW[z], t = 0, i; for (i = 0; i < 5; i++) t += w[i]; var r = RNG() * t; for (i = 0; i < 5; i++) { r -= w[i]; if (r <= 0) break; } return Math.max(min || 0, Math.min(4, i)); }
+  var SLOTN = { muzzle: '총구', sight: '조준기', mag: '탄창', grip: '손잡이' };
+  var ZONES = [
+    { n: '갈대 늪', w: 64, h: 46, seed: 20261111, rooms: 13, hedge: 110, crates: 16, foes: 15, tb: [['scav', 60], ['raider', 26], ['brute', 10], ['marks', 4]], tint: null },
+    { n: '폐허 마을', w: 72, h: 50, seed: 777123, rooms: 18, hedge: 90, crates: 16, foes: 24, tb: [['scav', 22], ['raider', 40], ['brute', 21], ['marks', 17]], tint: 'rgba(70,50,120,0.18)' },
+    { n: '왕의 요새', w: 78, h: 54, seed: 424242, rooms: 22, hedge: 60, crates: 14, foes: 30, tb: [['scav', 8], ['raider', 38], ['brute', 30], ['marks', 24]], tint: 'rgba(130,40,30,0.18)' }
+  ];
+  var ZHP = [1, 1.3, 1.65], ZDMG = [0.45, 0.55, 0.66];
+  var T_GUNZ = [[['pistol', 34], ['revolver', 10], ['smg', 24], ['shotgun', 18], ['smg2', 5], ['rifle', 6], ['dmr', 2], ['sniper', 1]], [['pistol', 6], ['revolver', 8], ['smg', 16], ['smg2', 14], ['shotgun', 12], ['sg2', 8], ['rifle', 16], ['ar2', 6], ['dmr', 8], ['sniper', 4], ['lmg', 2]], [['smg2', 8], ['sg2', 12], ['rifle', 16], ['ar2', 18], ['dmr', 10], ['dmr2', 10], ['sniper', 10], ['sr2', 6], ['lmg', 10]]];
+  var T_GEARZ = [[['vest1', 40], ['vest2', 20], ['helm1', 22], ['helm2', 8], ['pack2', 10]], [['vest2', 35], ['helm2', 20], ['pack2', 25], ['vest1', 10], ['vest3', 5], ['pack3', 5]], [['vest3', 30], ['helm2', 30], ['pack3', 25], ['vest2', 15]]];
+  var T_MOD = [['m_dot', 24], ['m_extmag', 22], ['m_fastmag', 18], ['m_grip', 18], ['m_supp', 9], ['m_scope', 9]];
+  var T_RARE = [['radio', 20], ['key', 8], ['soap', 20], ['medkit', 15], ['a_light_ap', 12, 20, 40], ['a_heavy_ap', 12, 20, 40], ['m_dot', 4], ['m_extmag', 4], ['m_fastmag', 4], ['m_grip', 4], ['m_supp', 3], ['m_scope', 3]];
+  var AMMO = { light: ['a_light', 'a_light_ap'], heavy: ['a_heavy', 'a_heavy_ap'], shell: ['a_shell'] };
+  var EQ = [['w1', '주무기'], ['w2', '보조무기'], ['armor', '방어구'], ['helmet', '투구'], ['pack', '가방']];
+  var ET = {
+    scav: { n: '좀도둑 악어', hp: 50, gun: 'pistol', red: 0, spd: 100, img: 'croc', h: 64, burst: 1, gap: [0.8, 1.4], acc: 0.14, pd: 230 },
+    raider: { n: '약탈 악어', hp: 65, gun: 'smg', red: 0.22, spd: 115, img: 'raider', h: 66, burst: 4, gap: [1.1, 1.7], acc: 0.16, pd: 210 },
+    brute: { n: '덩치 악어', hp: 125, gun: 'shotgun', red: 0.38, spd: 128, img: 'brute', h: 76, burst: 1, gap: [1.3, 1.8], acc: 0.2, pd: 105 },
+    marks: { n: '저격 악어', hp: 55, gun: 'sniper', red: 0.1, spd: 80, img: 'marks', h: 66, aim: 0.95, gap: [2.2, 3], acc: 0.01, pd: 470, sight: 640, pen: 0.4 },
+    boss: { n: '늪의 왕', hp: 360, gun: 'rifle', red: 0.52, spd: 105, img: 'boss', h: 98, burst: 5, gap: [0.9, 1.3], acc: 0.1, pd: 260, pen: 0.4, big: 1, gmin: 3 },
+    boss1: { n: '갈대밭 두목', hp: 230, gun: 'sg2', red: 0.3, spd: 120, img: 'boss1', alt: 'brute', h: 90, burst: 2, gap: [1.2, 1.7], acc: 0.18, pd: 120, big: 1, gmin: 1 },
+    boss2: { n: '기관총 대장', hp: 300, gun: 'lmg', red: 0.42, spd: 95, img: 'boss2', alt: 'raider', h: 92, burst: 10, gap: [1.4, 2], acc: 0.15, pd: 250, pen: 0.3, big: 1, gmin: 2 },
+    elite2: { n: '외눈 저격수', hp: 150, gun: 'sr2', red: 0.2, spd: 90, img: 'marks', h: 80, aim: 0.8, gap: [1.8, 2.5], acc: 0.005, pd: 480, sight: 680, pen: 0.5, dm: 0.5, big: 1, gmin: 2 },
+    guard3: { n: '왕의 근위대장', hp: 290, gun: 'ar2', red: 0.48, spd: 118, img: 'raider', h: 84, burst: 6, gap: [0.8, 1.2], acc: 0.09, pd: 240, pen: 0.4, big: 1, gmin: 2 }
+  };
+  var ZB = [{ b: ['boss1', 'scav', 'scav'], b2: null }, { b: ['boss2', 'raider', 'raider'], b2: ['elite2', 'marks'] }, { b: ['boss', 'raider', 'brute', 'raider'], b2: ['guard3', 'raider', 'raider'] }];
+  var T_CRATE = [['corn', 20], ['yuzu', 18], ['wire', 12], ['soap', 8], ['radio', 4], ['a_light', 16, 10, 30], ['a_heavy', 8, 8, 20], ['a_shell', 8, 4, 10], ['a_light_ap', 3, 8, 16], ['bandage', 12], ['pack1', 3], ['helm1', 3], ['vest1', 2], ['pistol', 3]];
+  var T_MED = [['bandage', 62, 1, 2], ['medkit', 38]];
+  var FAC = [
+    { k: 'wshop', n: '무기 상점', d: '더 좋은 총과 철갑탄을 판다', max: 3, cost: [1200, 2500, 5000] },
+    { k: 'ashop', n: '방어구 상점', d: '더 좋은 방어구·가방·약품을 판다', max: 3, cost: [1000, 2200, 4500] },
+    { k: 'mshop', n: '개조 공방', d: '더 좋은 총기 부품을 판다', max: 2, cost: [1500, 3500] },
+    { k: 'gym', n: '체육관', d: '최대 체력 +12, 기력 +10', max: 5, cost: [700, 1400, 2100, 2800, 3500] },
+    { k: 'ware', n: '창고', d: '창고 +12칸', max: 4, cost: [600, 1200, 1800, 2400] }
+  ];
+  var SHOPS = {
+    wshop: { n: '무기상', who: '수달 대장장이', say: '총은 쏴 봐야 압니다. 탄은 넉넉히 챙기세요.', fac: 'wshop', stock: [[['pistol'], ['a_light', 30], ['a_shell', 10]], [['smg'], ['shotgun'], ['revolver'], ['a_heavy', 30], ['a_light_ap', 30]], [['rifle'], ['smg2'], ['dmr'], ['a_heavy_ap', 30]], [['sniper'], ['ar2'], ['sg2'], ['lmg']]] },
+    ashop: { n: '방어구상', who: '거북 갑옷장이', say: '맞고도 걸어 나오는 게 제일 싼 겁니다.', fac: 'ashop', stock: [[['vest1'], ['helm1'], ['pack1']], [['vest2'], ['pack2']], [['helm2'], ['pack3']], [['vest3']]] },
+    mshop: { n: '개조 공방', who: '너구리 기술자', say: '부품은 총을 누른 뒤 아래 개조 칸에서 답니다.', fac: 'mshop', stock: [[['m_dot'], ['m_extmag']], [['m_grip'], ['m_fastmag']], [['m_supp'], ['m_scope']]] },
+    med: { n: '약방', who: '두루미 약사', say: '붕대는 싸고, 목숨은 비쌉니다.', fac: null, stock: [[['bandage'], ['medkit']]] }
+  };
+  var QCH = [
+    [
+      { t: '첫 귀환', d: '온천으로 1회 귀환하기', key: 'wins', need: 1, reward: 600 },
+      { t: '늪지 청소', d: '좀도둑 악어 5마리 처치', key: 'k_scav', need: 5, reward: 800, item: ['a_light', 60] },
+      { t: '상자 털이', d: '상자 10개 열어 보기', key: 'open', need: 10, reward: 700, item: ['bandage', 3] },
+      { t: '수집가의 부탁', d: '낡은 라디오 1개 납품', deliver: 'radio', reward: 1200 },
+      { t: '덩치 사냥', d: '덩치 악어 3마리 처치', key: 'k_brute', need: 3, reward: 1200, item: ['m_grip', 1] },
+      { t: '갈대밭 두목', d: '1구역 보스 갈대밭 두목 처치', key: 'k_boss1', need: 1, reward: 2500, item: ['smg2', 1, 2] },
+      { t: '더 깊은 곳으로', d: '차원문을 타고 2구역에 들어가기', key: 'z2', need: 1, reward: 1000, item: ['m_dot', 1] }
+    ],
+    [
+      { t: '폐허에서 살아 돌아오기', d: '2구역에서 온천으로 귀환', key: 'w2', need: 1, reward: 1500 },
+      { t: '약탈단 소탕', d: '약탈 악어 8마리 처치', key: 'k_raider', need: 8, reward: 1500, item: ['vest2', 1] },
+      { t: '저격수 사냥', d: '저격 악어 4마리 처치', key: 'k_marks', need: 4, reward: 1800, item: ['a_heavy_ap', 40] },
+      { t: '금고 열쇠', d: '황금 열쇠 1개 납품', deliver: 'key', reward: 2500, item: ['m_extmag', 1] },
+      { t: '외눈 저격수', d: '2구역 정예 외눈 저격수 처치', key: 'k_elite2', need: 1, reward: 3000, item: ['m_scope', 1] },
+      { t: '기관총 대장', d: '2구역 보스 기관총 대장 처치', key: 'k_boss2', need: 1, reward: 4000, item: ['dmr', 1, 2] },
+      { t: '요새로 가는 길', d: '차원문을 타고 3구역에 들어가기', key: 'z3', need: 1, reward: 1500 }
+    ],
+    [
+      { t: '요새 정찰', d: '3구역에서 온천으로 귀환', key: 'w3', need: 1, reward: 3000 },
+      { t: '요새 소탕', d: '3구역에서 악어 15마리 처치', key: 'k3', need: 15, reward: 3500, item: ['a_heavy_ap', 60] },
+      { t: '근위대 격파', d: '3구역 정예 왕의 근위대장 처치', key: 'k_guard3', need: 1, reward: 4000, item: ['m_supp', 1] },
+      { t: '늪의 왕', d: '3구역 보스 늪의 왕 처치', key: 'k_boss', need: 1, reward: 8000, item: ['sr2', 1, 4] }
+    ]
+  ];
+
+  function mk(id, q, gr) { var d = DB[id], it = { id: id }; if (d.t === 'gun') it.gr = gr || 0; if (d.stack) it.q = q || 1; if (d.dur) it.dur = d.dur; if (d.t === 'gun') { it.mag = d.mag; it.am = AMMO[d.cal][0]; it.mods = {}; } return it; }
+  function priceOf(it) { var d = DB[it.id], p = d.price * (it.q || 1) * (it.gr ? GPRICE[it.gr] : 1); if (d.dur) p *= 0.3 + 0.7 * it.dur / d.dur; if (it.mods) for (var k in it.mods) p += DB[it.mods[k]].price; return Math.round(p); }
+  function gstat(g) {
+    var d = DB[g.id], m = g.mods || {}, s = { dmg: d.dmg, rate: d.rate, mag: d.mag, spread: d.spread, spd: d.spd, reload: d.reload, pel: d.pel, auto: d.auto, noise: 560, kick: 1, bloom: 1, move: 1, vr: 0 }, gr = g.gr || 0;
+    s.dmg *= GD[gr]; s.spread *= GS[gr]; s.reload *= GR[gr]; s.mag *= GM[gr]; s.pen = GP[gr]; if (gr === 4) s.spd *= 1.15;
+    for (var k in m) { var e = DB[m[k]] && DB[m[k]].e; for (var q in e) { if (q === 'vr') s.vr += e[q]; else s[q] *= e[q]; } }
+    s.mag = Math.round(s.mag); return s;
+  }
+  function sellOf(it) { return Math.round(priceOf(it) * (DB[it.id].t === 'val' ? 1 : 0.35)); }
+
+  var save = null;
+  try { var raw = JSON.parse(localStorage.getItem('capy-raid-v2')); if (raw && raw.eq && raw.fac) save = raw; } catch (e) {}
+  if (!save) save = { money: 500, raids: 0, stash: [mk('bandage', 2), mk('a_light', 40)], eq: { w1: mk('pistol'), pack: mk('pack1') }, bag: [mk('a_light', 30), mk('bandage', 2)], fac: { wshop: 0, ashop: 0, gym: 0, ware: 0 }, cnt: { wins: 0, k_scav: 0, k_raider: 0, k_brute: 0, k_marks: 0, k_boss: 0 }, q: 0, qbase: 0, corpse: null };
+  if (save.fac.mshop == null) save.fac.mshop = 0;
+  if (!save.qs) { save.qs = [Math.min(save.q || 0, 2), 0, 0]; save.qb = [0, 0, 0]; }
+  function cnt(k) { return save.cnt[k] || 0; }
+  function inc(k) { save.cnt[k] = cnt(k) + 1; }
+  function persist() { try { localStorage.setItem('capy-raid-v2', JSON.stringify(save)); } catch (e) {} }
+
+  /* ---------- helpers ---------- */
+  var T = 50, MW = 64, MH = 46, VR = 440, NR = 125, MAXT = 84 * 60;
+  var solid = new Uint8Array(MAXT), floorT = new Uint8Array(MAXT), reach = new Uint8Array(MAXT), seenZ = [new Uint8Array(MAXT), new Uint8Array(MAXT), new Uint8Array(MAXT)], seen = seenZ[0];
+  var W = 800, H = 600, dpr = 1, scale = 1;
+  var state = 'base', last = 0, clock = 0, toastT = 0, hurtFlash = 0, shake = 0, shX = 0, shY = 0, hitMark = 0, hitKill = false, fx = [];
+  var RM = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var GLEN = { pistol: 24, smg: 36, shotgun: 48, rifle: 48, sniper: 58, revolver: 27, smg2: 38, sg2: 50, ar2: 50, dmr: 54, dmr2: 56, sr2: 64, lmg: 58 };
+  var P = null, enemies = [], bullets = [], boxes = [], parts = [], texts = [], exts = [], cam = { x: 0, y: 0 }, extT = 0;
+  var keys = {}, mouse = { x: 0, y: 0, down: false, used: true, fresh: false }, sticks = { move: null, aim: null };
+  var SPAWN = { tx: 3, ty: MH - 4 }, EXT_T = [{ tx: MW - 5, ty: 4 }, { tx: MW - 6, ty: MH - 5 }], PORT_T = null, zone = 0, portal = null, portT = 0;
+  var UI = { open: true, tab: 'stash', shop: 'wshop', other: null, sel: null, report: '' };
+  var rooms = [], spots = [], bossRoom = null, bossRoom2 = null;
+
+  var seed = 20261111;
+  function sr() { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+  function sir(a, b) { return Math.floor(a + sr() * (b - a + 1)); }
+  function rnd(a, b) { return a + RNG() * (b - a); }
+  function irnd(a, b) { return Math.floor(rnd(a, b + 1)); }
+  function idx(tx, ty) { return ty * MW + tx; }
+  function solidAt(x, y) { var tx = Math.floor(x / T), ty = Math.floor(y / T); if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return 1; return solid[idx(tx, ty)]; }
+  function blocked(x, y, r) {
+    var x0 = Math.floor((x - r) / T), x1 = Math.floor((x + r) / T), y0 = Math.floor((y - r) / T), y1 = Math.floor((y + r) / T);
+    for (var ty = y0; ty <= y1; ty++) for (var tx = x0; tx <= x1; tx++) {
+      if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return true;
+      if (!solid[idx(tx, ty)]) continue;
+      var nx = Math.max(tx * T, Math.min(x, tx * T + T)), ny = Math.max(ty * T, Math.min(y, ty * T + T));
+      if ((x - nx) * (x - nx) + (y - ny) * (y - ny) < r * r) return true;
+    }
+    return false;
+  }
+  function moveEnt(e, dx, dy) { var m = false; if (dx && !blocked(e.x + dx, e.y, e.r)) { e.x += dx; m = true; } if (dy && !blocked(e.x, e.y + dy, e.r)) { e.y += dy; m = true; } return m; }
+  function los(x0, y0, x1, y1) { var d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / 10); for (var i = 1; i < n; i++) if (solidAt(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n)) return false; return true; }
+  function castRay(x, y, a, max) {
+    var c = Math.cos(a), s = Math.sin(a);
+    for (var d = 6; d < max; d += 6) {
+      var px = x + c * d, py = y + s * d;
+      if (d % 24 === 0) { var tx = Math.floor(px / T), ty = Math.floor(py / T); if (tx >= 0 && ty >= 0 && tx < MW && ty < MH) seen[idx(tx, ty)] = 1; }
+      if (solidAt(px, py)) { var wx = Math.floor(px / T), wy = Math.floor(py / T); if (wx >= 0 && wy >= 0 && wx < MW && wy < MH) seen[idx(wx, wy)] = 1; return Math.min(max, d + 16); }
+    }
+    return max;
+  }
+  function angDiff(a, b) { var d = a - b; while (d > Math.PI) d -= 6.2832; while (d < -Math.PI) d += 6.2832; return d; }
+  function reserved(tx, ty, pad) { if (Math.hypot(tx - SPAWN.tx, ty - SPAWN.ty) < pad) return true; if (PORT_T && Math.hypot(tx - PORT_T.tx, ty - PORT_T.ty) < pad) return true; for (var i = 0; i < EXT_T.length; i++) if (Math.hypot(tx - EXT_T[i].tx, ty - EXT_T[i].ty) < pad) return true; return false; }
+  function pick(tb) { var tot = 0, i; for (i = 0; i < tb.length; i++) tot += tb[i][1]; var r = RNG() * tot; for (i = 0; i < tb.length; i++) { r -= tb[i][1]; if (r <= 0) break; } var e = tb[Math.min(i, tb.length - 1)]; return mk(e[0], e[2] ? irnd(e[2], e[3]) : 1); }
+
+  /* ---------- map (fixed layout, so it can be learned) ---------- */
+  function genMap(z) {
+    var Z = ZONES[z], ok = false, guard = 0, i, j, k;
+    MW = Z.w; MH = Z.h; SPAWN = { tx: 3, ty: MH - 4 }; EXT_T = [{ tx: MW - 5, ty: 4 }, { tx: MW - 6, ty: MH - 5 }]; PORT_T = z < 2 ? { tx: 5, ty: 5 } : null; seed = Z.seed; seen = seenZ[z];
+    while (!ok && guard++ < 40) {
+      solid.fill(0); floorT.fill(0); rooms = []; spots = [];
+      for (i = 0; i < MW; i++) { solid[idx(i, 0)] = 1; solid[idx(i, MH - 1)] = 1; }
+      for (j = 0; j < MH; j++) { solid[idx(0, j)] = 1; solid[idx(MW - 1, j)] = 1; }
+      for (k = 0; k < 220 && rooms.length < Z.rooms; k++) {
+        var w = sir(6, 11), h = sir(5, 8), x = sir(2, MW - w - 2), y = sir(2, MH - h - 2), bad = false;
+        for (i = x - 3; i < x + w + 3 && !bad; i++) for (j = y - 3; j < y + h + 3; j++) if (reserved(i, j, 2)) { bad = true; break; }
+        for (i = 0; i < rooms.length && !bad; i++) { var r = rooms[i]; if (x < r.x + r.w + 2 && x + w + 2 > r.x && y < r.y + r.h + 2 && y + h + 2 > r.y) bad = true; }
+        if (bad) continue;
+        for (i = x; i < x + w; i++) for (j = y; j < y + h; j++) { floorT[idx(i, j)] = 1; if (i === x || i === x + w - 1 || j === y || j === y + h - 1) solid[idx(i, j)] = 1; }
+        var sides = [0, 1, 2, 3].sort(function () { return sr() - 0.5; }).slice(0, 2);
+        for (i = 0; i < 2; i++) {
+          var s = sides[i], a;
+          if (s < 2) { a = sir(x + 1, x + w - 3); var yy = s === 0 ? y : y + h - 1; solid[idx(a, yy)] = 0; solid[idx(a + 1, yy)] = 0; }
+          else { a = sir(y + 1, y + h - 3); var xx = s === 2 ? x : x + w - 1; solid[idx(xx, a)] = 0; solid[idx(xx, a + 1)] = 0; }
+        }
+        rooms.push({ x: x, y: y, w: w, h: h });
+      }
+      for (k = 0; k < Z.hedge; k++) {
+        var tx = sir(2, MW - 3), ty = sir(2, MH - 3), near = false;
+        if (reserved(tx, ty, 4)) continue;
+        for (i = 0; i < rooms.length; i++) { var q = rooms[i]; if (tx >= q.x - 2 && tx < q.x + q.w + 2 && ty >= q.y - 2 && ty < q.y + q.h + 2) near = true; }
+        if (near) continue;
+        solid[idx(tx, ty)] = 2; if (sr() < 0.5) solid[idx(tx + (sr() < 0.5 ? 1 : 0), ty + 1)] = 2;
+      }
+      reach.fill(0);
+      var st = [idx(SPAWN.tx, SPAWN.ty)]; reach[st[0]] = 1;
+      while (st.length) { var c = st.pop(), cx = c % MW, cy = (c / MW) | 0, nb = [[1, 0], [-1, 0], [0, 1], [0, -1]]; for (i = 0; i < 4; i++) { var n = idx(cx + nb[i][0], cy + nb[i][1]); if (!solid[n] && !reach[n]) { reach[n] = 1; st.push(n); } } }
+      ok = rooms.length >= 8 && (!PORT_T || reach[idx(PORT_T.tx, PORT_T.ty)]) && EXT_T.every(function (e) { return reach[idx(e.tx, e.ty)]; });
+    }
+    bossRoom = null; var bd = 0;
+    rooms.forEach(function (r) { var d = Math.hypot(r.x + r.w / 2 - SPAWN.tx, r.y + r.h / 2 - SPAWN.ty) + r.w * r.h * 0.1; if (d > bd) { bd = d; bossRoom = r; } });
+    bossRoom2 = null;
+    if (z > 0 && bossRoom) { var b2 = 0; rooms.forEach(function (r) { if (r === bossRoom || Math.hypot(r.x - bossRoom.x, r.y - bossRoom.y) < 16) return; var d = Math.hypot(r.x + r.w / 2 - SPAWN.tx, r.y + r.h / 2 - SPAWN.ty); if (d > b2) { b2 = d; bossRoom2 = r; } }); }
+    rooms.forEach(function (r) {
+      var c1 = { x: (r.x + 1) * T + 25, y: (r.y + 1) * T + 25 }, c2 = { x: (r.x + r.w - 2) * T + 25, y: (r.y + r.h - 2) * T + 25 };
+      if (r === bossRoom || r === bossRoom2) { spots.push({ x: c1.x, y: c1.y, kind: r === bossRoom ? 'boss' : 'elite' }); spots.push({ x: c2.x, y: c2.y, kind: 'med' }); }
+      else { spots.push({ x: c1.x, y: c1.y, kind: sr() < 0.6 ? 'wcase' : 'med' }); spots.push({ x: c2.x, y: c2.y, kind: 'crate' }); }
+    });
+    for (k = 0; k < 400 && spots.length < rooms.length * 2 + Z.crates; k++) {
+      var fx = sir(1, MW - 2), fy = sir(1, MH - 2);
+      if (!reach[idx(fx, fy)] || floorT[idx(fx, fy)] || reserved(fx, fy, 3)) continue;
+      spots.push({ x: fx * T + 25, y: fy * T + 25, kind: 'crate' });
+    }
+  }
+  function freeTile(minSpawn, room) {
+    for (var k = 0; k < 500; k++) {
+      var tx, ty;
+      if (room) { tx = irnd(room.x + 1, room.x + room.w - 2); ty = irnd(room.y + 1, room.y + room.h - 2); }
+      else { tx = irnd(1, MW - 2); ty = irnd(1, MH - 2); }
+      if (!reach[idx(tx, ty)] || Math.hypot(tx - SPAWN.tx, ty - SPAWN.ty) < minSpawn || reserved(tx, ty, 2)) continue;
+      return { x: tx * T + 25, y: ty * T + 25 };
+    }
+    return { x: (MW / 2) * T, y: (MH / 2) * T };
+  }
+  function lootGun(tb, min) { var g = pick(tb); g.gr = rollGrade(zone, min); return g; }
+  function fillBox(kind) {
+    var it = [], n, g, c;
+    if (kind === 'crate') { n = irnd(2, 4); while (n--) { g = pick(T_CRATE); if (g.id === 'pistol') g.gr = rollGrade(zone, 0); it.push(g); } if (RNG() < zone * 0.3) it.push(pick(T_RARE)); }
+    else if (kind === 'med') { n = irnd(1, 3) + (zone > 0 ? 1 : 0); while (n--) it.push(pick(T_MED)); }
+    else if (kind === 'wcase' || kind === 'elite') {
+      g = lootGun(T_GUNZ[zone], kind === 'elite' ? zone : 0); c = AMMO[DB[g.id].cal]; it.push(g, mk(c[0], irnd(12, 30)));
+      if (RNG() < 0.25 + zone * 0.2) it.push(mk(c[c.length - 1], irnd(10, 24)));
+      if (RNG() < 0.45 + zone * 0.15) it.push(pick(T_GEARZ[zone]));
+      if (kind === 'elite' || RNG() < 0.12 + zone * 0.25) it.push(pick(T_MOD));
+      if (kind === 'elite' || (zone > 0 && RNG() < 0.5)) it.push(pick(T_RARE));
+    }
+    else if (kind === 'boss') {
+      g = lootGun(T_GUNZ[Math.min(2, zone + 1)], zone + 1); c = AMMO[DB[g.id].cal];
+      it.push(g, mk(c[c.length - 1], irnd(24, 40)), mk('medkit', zone + 1), pick(T_GEARZ[Math.min(2, zone + 1)]), pick(T_MOD), pick(T_RARE));
+      if (zone > 0) it.push(mk('key'), pick(T_MOD));
+      if (zone === 2) it.push(lootGun(T_GUNZ[2], 3), mk('key'), mk('vest3'), mk('helm2'), mk('radio'), mk('m_supp'), mk('m_scope'));
+    }
+    return it;
+  }
+  function spawnEnemy(type, p, home) {
+    var t = ET[type];
+    var hs = ZHP[zone] * (1 + 0.3 * Math.max(0, (NET.on ? NET.n : 1) - 1));
+    enemies.push({ id: ++EID, nx: p.x, ny: p.y, na: 0, tg: 0, x: p.x, y: p.y, r: t.big ? 20 : 15, type: type, hp: t.hp * hs, max: t.hp * hs, ang: rnd(0, 6.28), alert: false, mem: 0, lx: p.x, ly: p.y, tx: p.x, ty: p.y, cool: 0, burst: t.burst || 1, aim: 0, stuck: 0, walk: 0, vis: false, flash: 0, reveal: 0, strafe: Math.random() < 0.5 ? 1 : -1, home: home || null, face: 1, kx: 0, ky: 0, kick: 0, mflash: 0 });
+  }
+
+  /* ---------- inventory core ---------- */
+  function bagCap() { var p = save.eq.pack; return 8 + (p ? DB[p.id].slots : 0); }
+  function carryCap() { var p = save.eq.pack; return 22 + (p ? DB[p.id].carry : 0); }
+  function stashCap() { return 24 + save.fac.ware * 12; }
+  function weight() { var w = 0; save.bag.forEach(function (i) { w += DB[i.id].w * (i.q || 1); }); EQ.forEach(function (e) { var i = save.eq[e[0]]; if (i) w += DB[i.id].w; }); return w; }
+  function addList(list, cap, it) {
+    var d = DB[it.id];
+    if (d.stack) for (var i = 0; i < list.length && it.q > 0; i++) { var x = list[i]; if (x.id === it.id && x.q < d.stack) { var m = Math.min(d.stack - x.q, it.q); x.q += m; it.q -= m; } }
+    if (d.stack && it.q <= 0) return true;
+    if (list.length < cap) { list.push(it); return true; }
+    return false;
+  }
+  function countAmmo(id) { var n = 0; save.bag.forEach(function (i) { if (i.id === id) n += i.q; }); return n; }
+  function takeAmmo(id, n) { for (var i = save.bag.length - 1; i >= 0 && n > 0; i--) { var x = save.bag[i]; if (x.id !== id) continue; var m = Math.min(x.q, n); x.q -= m; n -= m; if (x.q <= 0) save.bag.splice(i, 1); } }
+  function slotFor(it) { var t = DB[it.id].t; if (t === 'gun') { if (!save.eq.w1) return 'w1'; if (!save.eq.w2) return 'w2'; return P && state === 'raid' ? P.act : 'w1'; } return t === 'armor' || t === 'helmet' || t === 'pack' ? t : null; }
+  function shopList() { var l = [], S = SHOPS[UI.shop], top = S.fac ? save.fac[S.fac] : 9; for (var lv = 0; lv <= top && lv < S.stock.length; lv++) S.stock[lv].forEach(function (e) { l.push(mk(e[0], e[1])); }); return l; }
+  var shopCache = null;
+  function otherList() { if (state === 'raid') return UI.other ? UI.other.items : null; if (UI.tab === 'stash') return save.stash; if (UI.tab === 'shop') return shopCache || (shopCache = shopList()); return null; }
+  function otherCap() { if (state === 'raid') return 14; return UI.tab === 'stash' ? stashCap() : 999; }
+  function getSel() { var s = UI.sel; if (!s) return null; if (s.src === 'eq') return save.eq[s.k]; if (s.src === 'bag') return save.bag[s.k]; var l = otherList(); return l ? l[s.k] : null; }
+  function cur() { return P ? save.eq[P.act] : null; }
+
+  function doAct(a) {
+    var s = UI.sel, it = getSel(), ol = otherList(), oc = otherCap(), base = state !== 'raid', shop = base && UI.tab === 'shop';
+    if (a === 'close') { closeInv(); return; }
+    if (!it) return;
+    var d = DB[it.id];
+    if (a === 'take' && NET.on && UI.other && UI.other.id) { if (!canFit(it)) toast('가방이 가득 찼습니다.'); else send({ t: 'take', b: UI.other.id, u: it.u }); return; }
+    if (a === 'take') { if (addList(save.bag, bagCap(), it)) { ol.splice(s.k, 1); sfx('pick'); } else toast('가방이 가득 찼습니다.'); }
+    else if (a === 'buy') {
+      var pr = priceOf(it);
+      if (save.money < pr) toast('돈이 부족합니다.');
+      else { var n = mk(it.id, it.q); if (addList(save.bag, bagCap(), n) || addList(save.stash, stashCap(), n)) { save.money -= pr; sfx('pick'); } else toast('둘 곳이 없습니다.'); }
+    }
+    else if (a === 'equip') {
+      var slot = slotFor(it), old = save.eq[slot], src = s.src === 'bag' ? save.bag : ol;
+      if (slot === 'pack' && save.bag.length - (s.src === 'bag' ? 1 : 0) + (old && s.src === 'bag' ? 1 : 0) > 8 + d.slots) { toast('가방 안 물건이 너무 많습니다.'); return; }
+      src.splice(s.k, 1); save.eq[slot] = it; if (old) src.splice(s.k, 0, old); sfx('pick');
+    }
+    else if (a === 'unequip') {
+      var capA = s.k === 'pack' ? 8 : bagCap();
+      if (save.bag.length < capA) { delete save.eq[s.k]; save.bag.push(it); }
+      else if (ol && !shop && !(NET.on && UI.other && UI.other.id) && ol.length < oc && (s.k !== 'pack' || save.bag.length <= 8)) { delete save.eq[s.k]; ol.push(it); }
+      else { toast('둘 곳이 없습니다.'); return; }
+    }
+    else if (a === 'move') { if (addList(ol, oc, it)) save.bag.splice(s.k, 1); else toast('공간이 없습니다.'); }
+    else if (a === 'sell') {
+      if (s.src === 'eq' && s.k === 'pack' && save.bag.length > 8) { toast('가방을 먼저 비우세요.'); return; }
+      save.money += sellOf(it);
+      if (s.src === 'eq') delete save.eq[s.k]; else (s.src === 'bag' ? save.bag : save.stash).splice(s.k, 1);
+      sfx('pick');
+    }
+    else if (a === 'repair') { var c = repairCost(it); if (save.money < c) { toast('돈이 부족합니다.'); return; } save.money -= c; it.dur = d.dur; }
+    else if (a === 'use') { startHeal(it); closeInv(); return; }
+    else if (a === 'drop') {
+      if (s.src === 'eq' && s.k === 'pack' && save.bag.length > 8) { toast('가방을 먼저 비우세요.'); return; }
+      var g = null; boxes.forEach(function (b) { if (b.kind === 'drop' && Math.hypot(b.x - P.x, b.y - P.y) < 40) g = b; });
+      if (NET.on) g = null;
+      if (!g) { g = { x: P.x, y: P.y + 10, kind: 'drop', items: [], rev: 99, st: 0, title: '바닥', born: clock }; boxes.push(g); }
+      g.items.push(it); if (NET.on) { g.id = NET.id + 'd' + (NET.uid++); it.u = g.id; g.title = '버린 물건'; send({ t: 'box', box: boxWire(g) }); } if (s.src === 'eq') delete save.eq[s.k]; else save.bag.splice(s.k, 1);
+    }
+    UI.sel = null;
+    if (P && state === 'raid' && !save.eq[P.act]) P.act = P.act === 'w1' ? 'w2' : 'w1';
+    if (base) persist();
+    renderInv(); hud();
+  }
+  function repairCost(it) { var d = DB[it.id]; return Math.ceil(d.price * 0.4 * (1 - it.dur / d.dur)); }
+
+  /* ---------- inventory / camp UI ---------- */
+  function cellHtml(it, src, k, hidden, tag) {
+    if (hidden) return '<div class="cell">?</div>';
+    var d = DB[it.id], on = UI.sel && UI.sel.src === src && String(UI.sel.k) === String(k);
+    return '<button type="button" class="cell ' + (d.t === 'gun' ? 'g' + (it.gr || 0) : 'r' + d.r) + (on ? ' on' : '') + '" data-src="' + src + '" data-k="' + k + '"><img src="img/ic_' + d.ic + '.png" alt=""' + (d.fx ? ' class="' + d.fx + '"' : '') + '><span class="nm">' + d.n + '</span>' +
+      (it.q > 1 ? '<span class="q">' + it.q + '</span>' : '') + (tag || d.cls ? '<span class="tag">' + (tag || d.cls) + '</span>' : '') + (d.dur ? '<i class="dur" style="width:' + Math.round(it.dur / d.dur * 100) + '%"></i>' : '') + '</button>';
+  }
+  function describe(it) {
+    var d = DB[it.id];
+    if (d.t === 'gun') { var gs = gstat(it); return CLSN[d.cls] + ' · 피해 ' + Math.round(gs.dmg) + (d.pel > 1 ? '×' + d.pel : '') + ' · 분당 ' + Math.round(60 / d.rate) + '발 · 탄창 ' + gs.mag + ' · 장전 ' + gs.reload.toFixed(1) + '초 · ' + DB[AMMO[d.cal][0]].n + ' · ' + d.w + 'kg'; }
+    if (d.t === 'mod') return SLOTN[d.slot] + ' 부품 · ' + d.desc;
+    if (d.t === 'armor' || d.t === 'helmet') return d.lv + '등급 · 피해 감소 ' + Math.round(d.red * 100) + '% · 내구 ' + Math.round(it.dur) + '/' + d.dur + ' · ' + d.w + 'kg';
+    if (d.t === 'pack') return '가방 +' + d.slots + '칸 · 적재 +' + d.carry + 'kg';
+    if (d.t === 'med') return '체력 +' + d.heal + ' · 사용 ' + d.use + '초';
+    if (d.t === 'ammo') return (d.pen ? '방어구 관통 ' + Math.round(d.pen * 100) + '% · ' : '') + it.q + '발';
+    return '상인에게 파는 귀중품 · ' + d.w + 'kg';
+  }
+  function detailHtml() {
+    var it = getSel(), s = UI.sel, base = state !== 'raid', shop = base && UI.tab === 'shop', ol = otherList(), b = '';
+    if (!it) return '<div class="detail"><div class="info"><small>' + (base ? '물건을 눌러 장착·이동·판매하세요.' : '물건을 눌러 가져가거나 장착하세요.') + '</small></div></div>';
+    var d = DB[it.id], eqp = d.t === 'gun' || d.t === 'armor' || d.t === 'helmet' || d.t === 'pack';
+    function bt(a, l) { b += '<button type="button" data-act="' + a + '">' + l + '</button>'; }
+    if (s.src === 'other') {
+      if (shop) bt('buy', '구매 ' + priceOf(it) + '냥');
+      else { bt('take', '가방에 넣기'); if (eqp && !(NET.on && !base && UI.other && UI.other.id)) bt('equip', '장착'); if (base) bt('sell', '판매 +' + sellOf(it) + '냥'); }
+    } else if (s.src === 'bag') {
+      if (eqp) bt('equip', '장착');
+      if (d.t === 'med' && !base) bt('use', '사용');
+      if (ol && !shop && !(NET.on && !base && UI.other && UI.other.id)) bt('move', base ? '창고로' : '상자에 넣기');
+      if (base) bt('sell', '판매 +' + sellOf(it) + '냥'); else bt('drop', '버리기');
+    } else {
+      bt('unequip', '해제');
+      if (base) { if (d.dur && it.dur < d.dur) bt('repair', '수리 ' + repairCost(it) + '냥'); bt('sell', '판매 +' + sellOf(it) + '냥'); } else bt('drop', '버리기');
+    }
+    var mh = '';
+    if (d.t === 'gun' && !(shop && s.src === 'other')) {
+      mh = '<div class="mods">';
+      d.slots.forEach(function (sl) {
+        var inst = it.mods && it.mods[sl];
+        if (inst) { mh += '<button type="button" class="in" data-moddel="' + sl + '">' + SLOTN[sl] + ': ' + DB[inst].n + ' · 분리</button>'; return; }
+        var pool = [], src = base ? save.bag.concat(save.stash) : save.bag;
+        src.forEach(function (x) { var md = DB[x.id]; if (md.t === 'mod' && md.slot === sl && pool.indexOf(x.id) < 0) pool.push(x.id); });
+        if (pool.length) pool.forEach(function (id) { mh += '<button type="button" data-modadd="' + sl + ':' + id + '">' + SLOTN[sl] + '에 ' + DB[id].n + ' 장착</button>'; });
+        else mh += '<span class="slot">' + SLOTN[sl] + ' 비어 있음</span>';
+      });
+      mh += '</div>';
+    }
+    return '<div class="detail"><div class="info"><b' + (d.t === 'gun' ? ' class="gt' + (it.gr || 0) + '">[' + GRN[it.gr || 0] + '] ' : '>') + d.n + '</b><small>' + describe(it) + '</small></div><div class="btns">' + b + '</div>' + mh + '</div>';
+  }
+  function modAct(add, arg) {
+    var g = getSel(), base = state !== 'raid'; if (!g || DB[g.id].t !== 'gun') return;
+    g.mods = g.mods || {};
+    if (add) {
+      var sl = arg.split(':')[0], id = arg.split(':')[1], l = save.bag, k = -1;
+      l.forEach(function (x, i) { if (x.id === id) k = i; });
+      if (k < 0 && base) { l = save.stash; l.forEach(function (x, i) { if (x.id === id) k = i; }); }
+      if (k < 0 || g.mods[sl]) return;
+      l.splice(k, 1); g.mods[sl] = id; sfx('click');
+      if (UI.sel.src === 'bag' && l === save.bag && k < UI.sel.k) UI.sel.k--;
+      if (UI.sel.src === 'other' && l === save.stash && UI.tab === 'stash' && k < UI.sel.k) UI.sel.k--;
+    } else {
+      var m = mk(g.mods[arg]);
+      if (save.bag.length < bagCap()) save.bag.push(m); else if (base && save.stash.length < stashCap()) save.stash.push(m); else { toast('부품을 둘 곳이 없습니다.'); return; }
+      delete g.mods[arg]; sfx('click');
+    }
+    var cap = gstat(g).mag; if (g.mag > cap) { addList(save.bag, bagCap() + 1, mk(g.am, g.mag - cap)); g.mag = cap; }
+    if (base) persist(); renderInv(); hud();
+  }
+  function questHtml() {
+    var h = '<section><h3>의뢰</h3>';
+    QCH.forEach(function (ch, c) {
+      var open = c === 0 || cnt(c === 1 ? 'z2' : 'z3') > 0;
+      h += '<h3>' + (c + 1) + '구역 ' + ZONES[c].n + (save.qs[c] >= ch.length ? ' · 모두 완료' : '') + '</h3><div class="rows">';
+      if (!open) { h += '<div class="row done"><div>잠김<small>' + (c + 1) + '구역에 한 번 들어가면 열립니다.</small></div></div></div>'; return; }
+      ch.forEach(function (q, i) {
+        if (i > save.qs[c] + 1) return;
+        var done = i < save.qs[c], cur = i === save.qs[c], prog = '', btn = '';
+        if (cur) {
+          if (q.deliver) { var has = save.stash.concat(save.bag).some(function (x) { return x.id === q.deliver; }); btn = '<button type="button" data-quest="' + c + '"' + (has ? '' : ' disabled') + '>납품</button>'; }
+          else { var p = Math.min(q.need, cnt(q.key) - save.qb[c]); prog = ' (' + p + '/' + q.need + ')'; btn = '<button type="button" data-quest="' + c + '"' + (p >= q.need ? '' : ' disabled') + '>완료</button>'; }
+        }
+        h += '<div class="row' + (done ? ' done' : '') + '"><div>' + q.t + (done ? ' · 완료' : '') + '<small>' + (i > save.qs[c] ? '다음 의뢰' : q.d + prog) + ' · 보상 ' + q.reward + '냥' + (q.item ? ' + ' + (q.item[2] ? '[' + GRN[q.item[2]] + '] ' : '') + DB[q.item[0]].n : '') + '</small></div>' + btn + '</div>';
+      });
+      h += '</div>';
+    });
+    return h + '</section>';
+  }
+  function facHtml() {
+    var h = '<section><h3>시설</h3><div class="rows">';
+    FAC.forEach(function (f) {
+      var lv = save.fac[f.k], max = lv >= f.max, c = max ? 0 : f.cost[lv];
+      h += '<div class="row"><div>' + f.n + ' <small>' + f.d + ' · ' + lv + '/' + f.max + '단계</small></div><button type="button" data-fac="' + f.k + '"' + (max || save.money < c ? ' disabled' : '') + '>' + (max ? '최대' : c + '냥') + '</button></div>';
+    });
+    return h + '</div><p class="keys">협동: F로 쓰러진 동료 일으키기 · G(가운데 클릭)로 위치 표시 · 물건을 버리면 동료가 주울 수 있습니다.<br>차원문(보라색)은 더 위험하고 보상이 좋은 다음 구역으로 이어집니다.<br>이동 WASD · 달리기 Shift · 구르기 Space · 사격 클릭 · 장전 R · 탄종 교체 T · 치료 Q · 열기 F · 가방 Tab · 무기 교체 1/2<br>터치: 왼쪽 화면 이동, 오른쪽 화면 조준(끝까지 밀면 사격), 나머지는 위쪽 버튼</p></section>';
+  }
+  function renderInv() {
+    var base = state !== 'raid', h = '', ol = otherList(), i;
+    inv.className = 'inv' + (base ? '' : ' raid');
+    if (base) {
+      h += '<div class="inv-h"><h2>온천 야영지</h2><span class="money">보유 <b>' + save.money + '냥</b></span><span class="sp"></span><button type="button" class="go" id="goBtn">출격</button></div>';
+      h += netHtml();
+      if (UI.report) h += UI.report;
+      if (save.corpse) h += '<div class="report lost">' + ((save.corpse.zone || 0) + 1) + '구역의 쓰러진 자리에 장비 ' + save.corpse.items.length + '개가 남아 있습니다. 다시 쓰러지기 전에 회수하세요.</div>';
+      h += '<div class="tabs">' + [['stash', '창고'], ['shop', '상점'], ['fac', '시설'], ['quest', '의뢰']].map(function (t) { return '<button type="button" data-tab="' + t[0] + '"' + (UI.tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join('') + '</div>';
+    } else h += '<div class="inv-h"><h2>' + (UI.other ? UI.other.title : '소지품') + '</h2><span class="sp"></span><button type="button" data-act="close">닫기</button></div>';
+    h += '<div class="cols">';
+    if (base && UI.tab === 'fac') h += facHtml();
+    else if (base && UI.tab === 'quest') h += questHtml();
+    else if (ol) {
+      var shop = base && UI.tab === 'shop';
+      h += '<section>';
+      if (shop) {
+        var S = SHOPS[UI.shop];
+        h += '<div class="tabs">' + ['wshop', 'ashop', 'mshop', 'med'].map(function (k) { return '<button type="button" data-shop="' + k + '"' + (UI.shop === k ? ' class="on"' : '') + '>' + SHOPS[k].n + '</button>'; }).join('') + '</div>';
+        h += '<div class="npc"><img src="img/npc_' + UI.shop + '.png" alt=""><div><b>' + S.who + '</b><small>' + S.say + (S.fac && save.fac[S.fac] < S.stock.length - 1 ? ' 시설을 올리면 물건이 늘어납니다.' : '') + '</small></div></div>';
+      }
+      h += '<h3>' + (base ? (shop ? '판매 물품' : '창고 ' + ol.length + '/' + stashCap()) : '내용물') + '</h3><div class="grid">';
+      for (i = 0; i < ol.length; i++) h += cellHtml(ol[i], 'other', i, !base && UI.other.rev <= i, shop ? priceOf(ol[i]) : '');
+      if (!ol.length) h += '<div class="cell">비어 있음</div>';
+      h += '</div></section>';
+    }
+    h += '<section><h3>장비</h3><div class="grid">';
+    EQ.forEach(function (e) { var it = save.eq[e[0]]; h += it ? cellHtml(it, 'eq', e[0]) : '<div class="cell">' + e[1] + '</div>'; });
+    h += '</div><h3>가방 ' + save.bag.length + '/' + bagCap() + ' · 무게 ' + weight().toFixed(1) + '/' + carryCap() + 'kg</h3><div class="grid">';
+    for (i = 0; i < save.bag.length; i++) h += cellHtml(save.bag[i], 'bag', i);
+    for (i = save.bag.length; i < Math.min(bagCap(), save.bag.length + 4); i++) h += '<div class="cell"></div>';
+    h += '</div></section></div>' + detailHtml();
+    inv.innerHTML = h; inv.hidden = false; UI.open = true;
+  }
+  function closeInv() { if (state !== 'raid') return; UI.open = false; UI.other = null; UI.sel = null; inv.hidden = true; }
+  inv.addEventListener('click', function (ev) {
+    var t = ev.target.closest('button'); if (!t) return;
+    if (t.id === 'goBtn') return startRaid();
+    if (t.dataset.net === 'join') return netJoin();
+    if (t.dataset.net === 'leave') return netLeave();
+    if (t.dataset.net === 'copy') { var link = location.origin + '/game/#' + NET.room; if (navigator.clipboard) navigator.clipboard.writeText(link).then(function () { toast('초대 링크를 복사했습니다.'); }, function () { toast(link); }); else toast(link); return; }
+    if (t.dataset.act) return doAct(t.dataset.act);
+    if (t.dataset.tab) { UI.tab = t.dataset.tab; UI.sel = null; shopCache = null; return renderInv(); }
+    if (t.dataset.shop) { UI.shop = t.dataset.shop; UI.sel = null; shopCache = null; return renderInv(); }
+    if (t.dataset.modadd) return modAct(true, t.dataset.modadd);
+    if (t.dataset.moddel) return modAct(false, t.dataset.moddel);
+    if (t.dataset.src) { UI.sel = { src: t.dataset.src, k: t.dataset.src === 'eq' ? t.dataset.k : +t.dataset.k }; return renderInv(); }
+    if (t.dataset.fac) { var f = FAC.filter(function (x) { return x.k === t.dataset.fac; })[0], c = f.cost[save.fac[f.k]]; if (save.money >= c) { save.money -= c; save.fac[f.k]++; shopCache = null; persist(); renderInv(); } return; }
+    if (t.dataset.quest) {
+      var c = +t.dataset.quest, q = QCH[c][save.qs[c]]; if (!q) return;
+      if (q.deliver) { var l = save.stash, k = -1; l.forEach(function (x, i) { if (x.id === q.deliver) k = i; }); if (k < 0) { l = save.bag; l.forEach(function (x, i) { if (x.id === q.deliver) k = i; }); } if (k < 0) return; l.splice(k, 1); }
+      save.money += q.reward;
+      if (q.item) { var gi = mk(q.item[0], q.item[1], q.item[2]); if (!addList(save.stash, stashCap() + 5, gi)) save.money += priceOf(gi); }
+      save.qs[c]++; var nq = QCH[c][save.qs[c]]; save.qb[c] = nq && nq.key ? cnt(nq.key) : 0;
+      toast('의뢰 완료: ' + q.t); sfx('heal'); persist(); renderInv();
+    }
+  });
+
+  /* ---------- co-op net ---------- */
+  var NET = { ok: /^https?:$/.test(location.protocol) && /\/game\/?/.test(location.pathname) && !!window.WebSocket, on: false, ws: null, id: 0, room: '', roomIn: (location.hash || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 8), name: '', players: [], host: true, wait: false, uid: 1, tick: 0, snap: 0, n: 1 };
+  var R = {}, pings = [], EID = 0, MCOL = ['#7fd0c4', '#f2a531', '#b08cff', '#ff8566', '#8fb85a'];
+  try { NET.name = localStorage.getItem('capy-name') || ''; } catch (e) {}
+  function send(o) { if (NET.on && NET.ws && NET.ws.readyState === 1) { try { NET.ws.send(JSON.stringify(o)); } catch (e) {} } }
+  function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function mates() { var n = 0; for (var k in R) if (!R[k].down) n++; return n; }
+  function netJoin() {
+    if (!NET.ok || NET.on) return;
+    var code = NET.roomIn || '';
+    if (!code) { var L = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; for (var i = 0; i < 4; i++) code += L[Math.floor(Math.random() * L.length)]; }
+    var nm = (NET.name || '').trim() || '카피바라';
+    try { localStorage.setItem('capy-name', nm); } catch (e) {}
+    var ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/game/ws?room=' + encodeURIComponent(code) + '&name=' + encodeURIComponent(nm));
+    NET.ws = ws; toast('방에 연결하는 중…');
+    ws.onmessage = function (ev) { var m; try { m = JSON.parse(ev.data); } catch (e) { return; } netMsg(m); };
+    ws.onclose = function () {
+      if (NET.ws !== ws) return;
+      var was = NET.on; NET.on = false; NET.ws = null; NET.players = []; R = {}; NET.host = true; NET.wait = false;
+      if (was) toast(state === 'raid' ? '연결이 끊겼습니다. 혼자 계속합니다.' : '방에서 나왔습니다.');
+      if (state !== 'raid') renderInv();
+    };
+  }
+  function netLeave() { if (NET.ws) { try { NET.ws.close(); } catch (e) {} } }
+  function findEnemy(id) { for (var i = 0; i < enemies.length; i++) if (enemies[i].id === id) return enemies[i]; return null; }
+  function findBox(id) { for (var i = 0; i < boxes.length; i++) if (boxes[i].id === id) return boxes[i]; return null; }
+  function canFit(it) {
+    var d = DB[it.id]; if (save.bag.length < bagCap()) return true; if (!d.stack) return false;
+    var room = 0; save.bag.forEach(function (x) { if (x.id === it.id) room += d.stack - x.q; }); return room >= it.q;
+  }
+  function netMsg(m) {
+    var e, b, rp, i;
+    if (m.t === 'hi') { NET.on = true; NET.id = m.id; NET.room = m.room; try { history.replaceState(null, '', '#' + m.room); } catch (e2) {} toast('방 ' + m.room + '에 들어왔습니다.'); if (state !== 'raid') renderInv(); return; }
+    if (m.t === 'full') { toast('방이 가득 찼습니다(최대 4명).'); return; }
+    if (m.t === 'who') {
+      NET.players = m.players; NET.n = m.players.length;
+      var wasHost = NET.host, here = {};
+      m.players.forEach(function (pl) { if (pl.id === NET.id) NET.host = pl.host || pl.zone < 0; if (pl.id !== NET.id && state === 'raid' && pl.zone === zone) here[pl.id] = pl; });
+      for (var k in R) if (!here[k]) delete R[k];
+      for (k in here) if (!R[k]) R[k] = { id: +k, name: here[k].name, x: -999, y: -999, tx: -999, ty: -999, ang: 0, ta: 0, hp: 1, g: 'pistol', roll: 0, down: 0, walk: 0, face: 1, flash: 0, fresh: true };
+      if (state === 'raid' && NET.host && !wasHost && !NET.wait) toast('이 구역의 적을 내가 맡습니다.');
+      if (state !== 'raid') renderInv();
+      return;
+    }
+    if (state !== 'raid') return;
+    if (m.t === 'zinfo') { if (m.z !== zone) return; NET.wait = false; NET.host = m.host === NET.id; NET.n = m.n || 1; populate(m.seed, NET.host, m.taken, m.boxes); return; }
+    if (m.t === 'p') {
+      rp = R[m.id]; if (!rp) return;
+      rp.tx = m.x; rp.ty = m.y; rp.ta = m.a; rp.hp = m.h; rp.g = m.g; rp.down = m.d ? 1 : 0;
+      if (rp.fresh) { rp.x = m.x; rp.y = m.y; rp.ang = m.a; rp.fresh = false; }
+      if (m.r && rp.roll <= 0) rp.roll = 0.36;
+      return;
+    }
+    if (m.t === 's') {
+      if (NET.host) return;
+      var seenIds = {};
+      m.e.forEach(function (a) {
+        var en = findEnemy(a[0]);
+        if (!en) { spawnEnemy(a[1], { x: a[2], y: a[3] }); en = enemies[enemies.length - 1]; en.id = a[0]; }
+        seenIds[a[0]] = 1; en.nx = a[2]; en.ny = a[3]; en.na = a[4]; en.hp = Math.min(en.hp, a[5]) < a[5] - 40 ? a[5] : Math.min(en.hp, a[5]); en.max = a[8];
+        en.alert = !!(a[6] & 1); en.aim = a[6] & 2 ? 0.5 : 0; en.tg = a[7];
+      });
+      for (i = enemies.length - 1; i >= 0; i--) if (!seenIds[enemies[i].id]) enemies.splice(i, 1);
+      return;
+    }
+    if (m.t === 'took') {
+      b = findBox(m.b); if (!b) return;
+      for (i = 0; i < b.items.length; i++) if (b.items[i].u === m.u) {
+        var it = b.items.splice(i, 1)[0];
+        if (m.id === NET.id) { delete it.u; if (!addList(save.bag, bagCap() + 2, it)) toast('가방이 가득 찼습니다.'); sfx('pick'); hud(); }
+        break;
+      }
+      if (UI.open && UI.other === b) { UI.sel = null; renderInv(); }
+      return;
+    }
+    if (m.t === 'deny') { toast('다른 동료가 먼저 가져갔습니다.'); return; }
+    if (m.t === 'box') { addNetBox(m.box); return; }
+    if (m.t === 'kill') {
+      e = findEnemy(m.e);
+      if (e) { enemies.splice(enemies.indexOf(e), 1); }
+      spark(m.x, m.y, '#5d8a4a', 16); dust(m.x, m.y + 12, 6); fx.push({ k: 'die', x: m.x, y: m.y, type: m.ty, face: m.f || 1, life: 0.55 });
+      inc('k_' + m.ty); if (zone === 2) inc('k3'); if (Math.hypot(m.x - P.x, m.y - P.y) < 700) sfx('boom');
+      if (ET[m.ty].big) toast(ET[m.ty].n + ' 처치!');
+      if (m.box) addNetBox(m.box, 0.3);
+      return;
+    }
+    if (m.t !== 'ev') return;
+    rp = R[m.id];
+    if (m.k === 'shot') {
+      m.a.forEach(function (a) { bullets.push({ x: m.x, y: m.y, vx: Math.cos(a) * m.s, vy: Math.sin(a) * m.s, life: m.l, mine: true, ghost: true, dmg: 0, pen: 0, gr: m.gr || 0 }); });
+      if (rp) rp.flash = 0.06;
+      var dd = Math.hypot(m.x - P.x, m.y - P.y); if (dd < 900) sfx('shot', (m.n < 300 ? 0.3 : 1) * Math.max(0.15, 1 - dd / 900));
+      if (NET.host) for (i = 0; i < enemies.length; i++) { e = enemies[i]; if (Math.hypot(e.x - m.x, e.y - m.y) < m.n && !e.alert) { e.mem = 4; e.lx = m.x; e.ly = m.y; } }
+    } else if (m.k === 'hit') {
+      e = findEnemy(m.e); if (!e) return;
+      e.flash = 0.1;
+      if (NET.host) { e.hp -= m.d; e.kx += m.kx; e.ky += m.ky; e.mem = 5; if (rp) { e.lx = rp.x; e.ly = rp.y; } }
+    } else if (m.k === 'eb') {
+      m.b.forEach(function (a) { bullets.push({ x: a[0], y: a[1], vx: a[2], vy: a[3], life: 1.1, mine: false, dmg: a[4], pen: a[5] }); });
+      e = findEnemy(m.e); if (e) { e.reveal = 0.7; e.kick = 0.1; e.mflash = 0.06; if (Math.hypot(e.x - P.x, e.y - P.y) < 700) sfx('eshot'); }
+    } else if (m.k === 'ping') {
+      pings.push({ x: m.x, y: m.y, life: 6, c: MCOL[m.id % MCOL.length], n: rp ? rp.name : '' }); sfx('click');
+    } else if (m.k === 'rev') {
+      if (m.to === NET.id && P.down > 0) { P.down = 0; P.hp = P.max * 0.35; toast((rp ? rp.name : '동료') + '님이 일으켜 줬습니다.'); sfx('heal'); }
+    } else if (m.k === 'msg') {
+      toast((rp ? rp.name : '동료') + m.s);
+    }
+  }
+  function addNetBox(bx, delay) {
+    if (!bx || findBox(bx.id)) return;
+    boxes.push({ id: bx.id, x: bx.x, y: bx.y, kind: bx.kind, items: bx.items, rev: bx.kind === 'drop' ? 99 : 0, st: 0, title: bx.title, born: clock + (delay || 0) });
+  }
+  function boxWire(b) { return { id: b.id, x: Math.round(b.x), y: Math.round(b.y), kind: b.kind, title: b.title, items: b.items }; }
+  function netHtml() {
+    if (!NET.ok) return '';
+    if (!NET.on) return '<div class="net"><input id="netName" maxlength="12" placeholder="내 이름" value="' + NET.name.replace(/"/g, '') + '"><input id="netRoom" maxlength="8" placeholder="방 코드" value="' + NET.roomIn + '"><button type="button" data-net="join">' + (NET.roomIn ? '방 참가' : '방 만들기') + '</button><small>같은 방 코드를 쓰는 친구(최대 4명)와 같은 필드에 들어갑니다. 연결하지 않으면 혼자 합니다.</small></div>';
+    var who = NET.players.map(function (pl) { return '<span style="color:' + MCOL[pl.id % MCOL.length] + '">' + pl.name + '</span> ' + (pl.zone < 0 ? '야영지' : (pl.zone + 1) + '구역'); }).join(' · ');
+    return '<div class="net"><div class="who">방 <b>' + NET.room + '</b> · ' + NET.players.length + '/4명<br>' + who + '</div><button type="button" data-net="copy">초대 링크 복사</button><button type="button" data-net="leave">나가기</button></div>';
+  }
+  inv.addEventListener('input', function (ev) {
+    if (ev.target.id === 'netName') NET.name = ev.target.value.slice(0, 12);
+    if (ev.target.id === 'netRoom') { NET.roomIn = ev.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 8); ev.target.value = NET.roomIn; var jb = inv.querySelector('[data-net=join]'); if (jb) jb.textContent = NET.roomIn ? '방 참가' : '방 만들기'; }
+  });
+  function doPing() {
+    if (state !== 'raid') return;
+    var x = mouse.used ? cam.x + (mouse.x - W / 2) / scale : P.x + Math.cos(P.ang) * 160, y = mouse.used ? cam.y + (mouse.y - H / 2) / scale : P.y + Math.sin(P.ang) * 160;
+    pings.push({ x: x, y: y, life: 6, c: MCOL[NET.id % MCOL.length], n: '' }); sfx('click');
+    send({ t: 'ev', k: 'ping', x: Math.round(x), y: Math.round(y) });
+  }
+  function pickTarget(e) {
+    var best = P, bd = P.down > 0 ? 1e9 : Math.hypot(P.x - e.x, P.y - e.y);
+    for (var k in R) { var rp = R[k]; if (rp.down || rp.fresh) continue; var d = Math.hypot(rp.x - e.x, rp.y - e.y); if (d < bd) { bd = d; best = rp; } }
+    e.tg = best === P ? NET.id : best.id;
+    return best === P ? { x: P.x, y: P.y, down: P.down > 0 } : best;
+  }
+  function seenByMe(e) { var d = Math.hypot(P.x - e.x, P.y - e.y); return d < VR && (d < NR || Math.abs(angDiff(Math.atan2(e.y - P.y, e.x - P.x), P.ang)) < 1.05) && los(P.x, P.y, e.x, e.y); }
+
+  /* ---------- sound ---------- */
+  var AC = null, noiseBuf = null, soundOn = true;
+  function initAudio() { if (AC) return; try { AC = new (window.AudioContext || window.webkitAudioContext)(); noiseBuf = AC.createBuffer(1, 8000, 22050); var d = noiseBuf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; } catch (e) { AC = null; } }
+  function sfx(k, vol) {
+    if (!AC || !soundOn) return;
+    var t = AC.currentTime, g = AC.createGain(); g.connect(AC.destination);
+    if (k === 'shot' || k === 'eshot' || k === 'boom') {
+      var b = AC.createBufferSource(), f = AC.createBiquadFilter(); b.buffer = noiseBuf; f.type = 'lowpass'; f.frequency.value = k === 'shot' ? 2200 : k === 'boom' ? 700 : 1100;
+      b.connect(f); f.connect(g); var len = k === 'boom' ? 0.28 : 0.11;
+      g.gain.setValueAtTime((vol || 1) * (k === 'shot' ? 0.22 : 0.16), t); g.gain.exponentialRampToValueAtTime(0.001, t + len); b.start(t); b.stop(t + len + 0.02);
+    } else {
+      var o = AC.createOscillator(), fr = { pick: [520, 880], hit: [220, 110], hurt: [160, 70], click: [300, 300], heal: [440, 660] }[k] || [400, 400];
+      o.type = 'triangle'; o.connect(g); o.frequency.setValueAtTime(fr[0], t); o.frequency.exponentialRampToValueAtTime(fr[1], t + 0.12);
+      g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16); o.start(t); o.stop(t + 0.17);
+    }
+  }
+
+  /* ---------- raid ---------- */
+  function startRaid() {
+    initAudio();
+    if (!save.eq.w1 && !save.eq.w2) { save.eq.w1 = mk('pistol'); addList(save.bag, bagCap() + 1, mk('a_light', 24)); }
+    var hpMax = 100 + save.fac.gym * 12, stMax = 100 + save.fac.gym * 10;
+    P = { x: 0, y: 0, r: 14, ang: -0.6, hp: hpMax, max: hpMax, st: stMax, stMax: stMax, stWait: 0, act: save.eq.w1 ? 'w1' : 'w2', cool: 0, reload: 0, walk: 0, roll: 0, rx: 0, ry: 0, heal: null, kills: 0, vx: 0, vy: 0, face: 1, kick: 0, bloom: 0, flash: 0, land: 0, view: -0.6, step: 0, swapT: 0, trail: 0 };
+    clock = 0; state = 'raid'; UI.report = '';
+    enterZone(0);
+    last = performance.now(); requestAnimationFrame(frame);
+  }
+  function enterZone(z) {
+    zone = z; genMap(z);
+    var Z = ZONES[z], i, p;
+    P.x = SPAWN.tx * T + 25; P.y = SPAWN.ty * T + 25; P.vx = P.vy = 0; P.roll = 0; P.heal = null;
+    enemies = []; bullets = []; boxes = []; parts = []; texts = []; fx = []; shake = 0; extT = 0; portT = 0; hurtFlash = 0;
+    exts = EXT_T.map(function (e) { return { x: e.tx * T + 25, y: e.ty * T + 25 }; });
+    portal = PORT_T ? { x: PORT_T.tx * T + 25, y: PORT_T.ty * T + 25 } : null;
+    R = {}; pings = []; P.down = 0; P.rev = null;
+    if (NET.on) { NET.wait = true; NET.host = false; send({ t: 'zone', z: z }); }
+    else { NET.host = true; populate(null, true, null, null); }
+    cam.x = P.x; cam.y = P.y;
+    if (z === 1) inc('z2'); if (z === 2) inc('z3');
+    UI.other = null; UI.sel = null; UI.open = false; inv.hidden = true;
+    toast((z + 1) + '구역 ' + Z.n + (z === 0 ? ' · 동쪽 온천으로 귀환, 북서쪽 차원문은 더 위험한 구역' : z === 1 ? ' · 적이 강해지고 보상이 좋아집니다' : ' · 가장 위험한 곳, 늪의 왕이 지킵니다'));
+  }
+  function populate(seed, foes, taken, extra) {
+    var z = zone, Z = ZONES[z], i, p, gone = {};
+    if (seed != null) RNG = mulberry(seed);
+    spots.forEach(function (s, bi) {
+      var items = fillBox(s.kind); items.forEach(function (it, k) { it.u = bi + '.' + k; });
+      boxes.push({ id: 's' + bi, x: s.x, y: s.y, kind: s.kind, items: items, rev: 0, st: 0, title: s.kind === 'crate' ? '나무 상자' : s.kind === 'med' ? '의료 상자' : s.kind === 'boss' ? (z === 2 ? '왕의 금고' : '두목의 금고') : s.kind === 'elite' ? '정예 보급 상자' : '무기 상자' });
+    });
+    RNG = Math.random;
+    if (extra) extra.forEach(function (bx) { addNetBox(bx); });
+    if (taken && taken.length) { taken.forEach(function (u) { gone[u] = 1; }); boxes.forEach(function (b) { b.items = b.items.filter(function (it) { return !gone[it.u]; }); }); }
+    if (seed == null) boxes.forEach(function (b) { delete b.id; });
+    if (save.corpse && (save.corpse.zone || 0) === z) boxes.push({ x: save.corpse.x, y: save.corpse.y, kind: 'mine', items: save.corpse.items, rev: 99, st: 0, title: '내 장비' });
+    if (!foes) return;
+    var n = Z.foes + Math.min(6, save.raids), tb = z === 0 && save.raids < 2 && !NET.on ? [['scav', 72], ['raider', 22], ['brute', 6]] : Z.tb;
+    for (i = 0; i < n; i++) {
+      var room = i % 3 === 0 ? rooms[irnd(0, rooms.length - 1)] : null; if (room === bossRoom || room === bossRoom2) room = null;
+      p = freeTile(15, room);
+      var tot = 0, r, j; tb.forEach(function (e) { tot += e[1]; }); r = Math.random() * tot;
+      for (j = 0; j < tb.length; j++) { r -= tb[j][1]; if (r <= 0) break; }
+      spawnEnemy(tb[Math.min(j, tb.length - 1)][0], p);
+    }
+    [[bossRoom, ZB[z].b], [bossRoom2, ZB[z].b2]].forEach(function (g) {
+      if (!g[0] || !g[1]) return;
+      var hm = { x: (g[0].x + g[0].w / 2) * T, y: (g[0].y + g[0].h / 2) * T };
+      g[1].forEach(function (ty) { spawnEnemy(ty, freeTile(0, g[0]), hm); });
+    });
+  }
+  function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; toastT = 3; if (state !== 'raid') setTimeout(function () { if (state !== 'raid') toastEl.hidden = true; }, 2500); }
+  function spark(x, y, color, n) { for (var i = 0; i < n; i++) { var a = rnd(0, 6.28), v = rnd(40, 180); parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.2, 0.5), c: color }); } }
+  function dust(x, y, n) { for (var i = 0; i < n; i++) parts.push({ x: x + rnd(-6, 6), y: y + rnd(-2, 2), vx: rnd(-20, 20), vy: rnd(-16, -2), life: 0.45, k: 'dust', r: rnd(3, 5.5) }); }
+  function casing(x, y, ang) { var a = ang + 1.7 * (Math.cos(ang) < 0 ? 1 : -1) + rnd(-0.35, 0.35); parts.push({ x: x, y: y, vx: Math.cos(a) * rnd(50, 95), vy: Math.sin(a) * rnd(30, 60), z: 14, vz: rnd(90, 150), life: 1, k: 'shell', rot: rnd(0, 6) }); }
+  function muzzle() { var g = cur(), l = (g ? GLEN[g.id] + (g.mods && g.mods.muzzle ? 10 : 0) : 20) + 6; return { x: P.x + Math.cos(P.ang) * l, y: P.y - 12 + Math.sin(P.ang) * l }; }
+  function floatText(x, y, t, c) { texts.push({ x: x, y: y, t: t, c: c, life: 1.1 }); }
+
+  function reloadGun() {
+    var g = cur(); if (state !== 'raid' || !g || P.reload || P.heal || P.down > 0) return;
+    var d = DB[g.id], gs = gstat(g); if (g.mag >= gs.mag) return;
+    if (!countAmmo(g.am)) { var alt = AMMO[d.cal].filter(function (a) { return countAmmo(a); })[0]; if (!alt) { toast(DB[AMMO[d.cal][0]].n + '이 없습니다.'); return; } if (g.mag > 0) addList(save.bag, bagCap() + 1, mk(g.am, g.mag)); g.mag = 0; g.am = alt; }
+    P.reload = gs.reload; sfx('click');
+  }
+  function swapAmmo() {
+    var g = cur(); if (state !== 'raid' || !g || P.reload) return;
+    var list = AMMO[DB[g.id].cal], next = list[(list.indexOf(g.am) + 1) % list.length];
+    if (next === g.am || !countAmmo(next)) { toast('바꿀 탄이 없습니다.'); return; }
+    if (g.mag > 0) addList(save.bag, bagCap() + 1, mk(g.am, g.mag));
+    g.mag = 0; g.am = next; toast(DB[next].n + ' 장전'); reloadGun();
+  }
+  function swapGun(slot) { if (state !== 'raid') return; var s = slot || (P.act === 'w1' ? 'w2' : 'w1'); if (!save.eq[s] || s === P.act) return; P.act = s; P.reload = 0; P.cool = 0.25; P.swapT = 0.25; sfx('click'); hud(); }
+  function startHeal(it) { if (state !== 'raid' || P.heal || P.down > 0) return; if (P.hp >= P.max) { toast('체력이 가득합니다.'); return; } P.heal = { it: it, t: DB[it.id].use, max: DB[it.id].use }; P.reload = 0; }
+  function quickHeal() {
+    if (state !== 'raid') return;
+    var b = null, m = null; save.bag.forEach(function (i) { if (i.id === 'bandage') b = i; if (i.id === 'medkit') m = i; });
+    var it = (P.max - P.hp >= 55 && m) ? m : (b || m);
+    if (!it) { toast('치료 도구가 없습니다.'); return; } startHeal(it);
+  }
+  function doRoll() {
+    if (state !== 'raid' || P.roll > 0 || P.st < 28 || UI.open || P.down > 0) return;
+    var mx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0), my = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+    if (sticks.move) { mx = sticks.move.dx; my = sticks.move.dy; }
+    var l = Math.hypot(mx, my); if (l < 0.1) { mx = Math.cos(P.ang); my = Math.sin(P.ang); l = 1; }
+    P.rx = mx / l; P.ry = my / l; P.roll = 0.36; dust(P.x, P.y + 13, 6); P.st -= 28; P.stWait = 0.7; P.heal = null; P.reload = 0;
+  }
+  function interact() {
+    if (state !== 'raid' || P.down > 0) return;
+    if (UI.open) { closeInv(); return; }
+    for (var rk in R) if (R[rk].down && Math.hypot(R[rk].x - P.x, R[rk].y - P.y) < 60) { P.rev = { id: R[rk].id, t: 0 }; return; }
+    var b = nearBox(); if (!b) { toast('근처에 열 것이 없습니다.'); return; }
+    if (!b.touched && (b.kind === 'crate' || b.kind === 'wcase' || b.kind === 'med' || b.kind === 'boss' || b.kind === 'elite')) { b.touched = 1; inc('open'); }
+    UI.other = b; UI.sel = null; renderInv(); sfx('click');
+  }
+  function nearBox() { var best = null, bd = 54; boxes.forEach(function (b) { var d = Math.hypot(b.x - P.x, b.y - P.y); if (d < bd) { bd = d; best = b; } }); return best; }
+  function toggleBag() { if (state !== 'raid') return; if (UI.open) closeInv(); else { UI.other = null; UI.sel = null; renderInv(); } }
+
+  function hurt(dmg, pen) {
+    if (P.roll > 0 || P.down > 0) return;
+    var a = save.eq.armor, h = save.eq.helmet, red = 0;
+    if (a && a.dur > 0) red += DB[a.id].red; if (h && h.dur > 0) red += DB[h.id].red;
+    red *= 1 - (pen || 0);
+    var abs = dmg * red;
+    if (a && a.dur > 0) { a.dur = Math.max(0, a.dur - abs * 0.55); if (a.dur <= 0) toast('방어구가 부서졌습니다.'); }
+    if (h && h.dur > 0) h.dur = Math.max(0, h.dur - abs * 0.25);
+    P.hp -= dmg - abs; hurtFlash = 0.25; shake = Math.max(shake, 6); P.heal = null; sfx('hurt'); spark(P.x, P.y, '#d9553f', 6);
+  }
+  function killEnemy(e) {
+    var t = ET[e.type], g = DB[t.gun], it = [];
+    spark(e.x, e.y, '#5d8a4a', 16); dust(e.x, e.y + 12, 6); fx.push({ k: 'die', x: e.x, y: e.y, type: e.type, face: e.face, life: 0.55 }); shake = Math.max(shake, 3.5); P.kills++; inc('k_' + e.type); if (zone === 2) inc('k3'); sfx('boom');
+    var gun = mk(t.gun); gun.mag = irnd(0, g.mag); gun.gr = t.big ? rollGrade(zone, t.gmin) : (Math.random() < 0.7 ? 0 : rollGrade(zone, 0)); if (Math.random() < zone * 0.3) { var rm = pick(T_MOD); if (DB[t.gun].slots.indexOf(DB[rm.id].slot) >= 0) gun.mods[DB[rm.id].slot] = rm.id; } it.push(gun, mk(AMMO[g.cal][0], irnd(6, 22)));
+    if (Math.random() < 0.35) it.push(mk('bandage', 1));
+    if (Math.random() < 0.35) it.push(pick(T_CRATE));
+    var ar = { raider: ['vest1', 0.5], brute: ['vest2', 0.55], boss: ['vest3', 1], marks: ['helm1', 0.4], boss1: ['vest1', 1], boss2: ['vest2', 1], elite2: ['helm2', 1], guard3: ['vest3', 0.7] }[e.type];
+    if (ar && Math.random() < ar[1]) { var v = mk(ar[0]); v.dur = Math.round(DB[ar[0]].dur * rnd(0.3, 0.85)); it.push(v); }
+    if (t.big) it.push(mk('medkit', 1), pick(T_RARE), pick(T_MOD));
+    if (e.type === 'boss') it.push(mk('helm2'), mk('a_heavy_ap', 30));
+    var bb = { x: e.x, y: e.y, kind: 'body', items: it, rev: 0, st: 0, title: t.n + '의 소지품', born: clock + 0.3 };
+    if (NET.on) { bb.id = 'k' + NET.id + '_' + e.id; it.forEach(function (x, k) { x.u = bb.id + '.' + k; }); send({ t: 'kill', e: e.id, ty: e.type, x: Math.round(e.x), y: Math.round(e.y), f: e.face < 0 ? -1 : 1, box: boxWire(bb) }); if (t.big) toast(t.n + ' 처치!'); }
+    boxes.push(bb);
+  }
+  function fireEnemy(e, t, g, TG) {
+    var n = g.pel > 1 ? 5 : 1, base = Math.atan2(TG.y - e.y, TG.x - e.x), wire = [];
+    for (var i = 0; i < n; i++) {
+      var a = base + rnd(-t.acc, t.acc) + (n > 1 ? rnd(-0.14, 0.14) : 0), sp = t.aim ? 1150 : 560;
+      var bl = { x: e.x + Math.cos(a) * 24, y: e.y + Math.sin(a) * 24, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.1, mine: false, dmg: g.dmg * ZDMG[zone] * (t.dm || 1), pen: t.pen || 0 };
+      bullets.push(bl); wire.push([Math.round(bl.x), Math.round(bl.y), Math.round(bl.vx), Math.round(bl.vy), +bl.dmg.toFixed(1), bl.pen]);
+    }
+    if (NET.on) send({ t: 'ev', k: 'eb', e: e.id, b: wire });
+    e.reveal = 0.7; e.kick = 0.1; e.mflash = 0.06; if (Math.hypot(e.x - P.x, e.y - P.y) < 700) sfx('eshot');
+  }
+
+  function update(dt) {
+    clock += dt;
+    if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.hidden = true; }
+    if (hurtFlash > 0) hurtFlash -= dt;
+    var i, e, b, d, g = cur(), gd = g ? gstat(g) : null;
+    VR = 440 + (gd ? gd.vr : 0);
+
+    var mx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), my = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+    if (sticks.move) { mx = sticks.move.dx / 50; my = sticks.move.dy / 50; }
+    if (P.down > 0) {
+      mx = my = 0; P.down -= dt; P.heal = null; P.reload = 0;
+      if (P.down <= 0 || mates() === 0) { P.hp = 0; P.down = 0; return finish(false); }
+    }
+    if (P.rev) {
+      var rm8 = R[P.rev.id];
+      if (!rm8 || !rm8.down || Math.hypot(rm8.x - P.x, rm8.y - P.y) > 70) P.rev = null;
+      else { P.rev.t += dt; if (P.rev.t >= 2.5) { send({ t: 'ev', k: 'rev', to: P.rev.id }); rm8.down = 0; P.rev = null; sfx('heal'); } }
+    }
+    for (var rk2 in R) {
+      var rp2 = R[rk2]; if (rp2.fresh) continue;
+      var ddx = rp2.tx - rp2.x, ddy = rp2.ty - rp2.y, lk = Math.min(1, dt * 12);
+      if (Math.abs(ddx) + Math.abs(ddy) > 2) rp2.walk += dt * 11;
+      rp2.x += ddx * lk; rp2.y += ddy * lk; rp2.ang += angDiff(rp2.ta, rp2.ang) * lk;
+      rp2.face += ((Math.cos(rp2.ang) < 0 ? -1 : 1) - rp2.face) * Math.min(1, dt * 16);
+      if (rp2.roll > 0) rp2.roll -= dt; if (rp2.flash > 0) rp2.flash -= dt;
+    }
+    for (var pk = pings.length - 1; pk >= 0; pk--) { pings[pk].life -= dt; if (pings[pk].life <= 0) pings.splice(pk, 1); }
+    if (NET.on) {
+      NET.tick -= dt;
+      if (NET.tick <= 0) { NET.tick = 0.08; send({ t: 'p', x: Math.round(P.x), y: Math.round(P.y), a: +P.ang.toFixed(2), h: +(Math.max(0, P.hp) / P.max).toFixed(2), g: g ? g.id : '', r: P.roll > 0 ? 1 : 0, d: P.down > 0 ? 1 : 0 }); }
+      if (NET.host && !NET.wait) {
+        NET.snap -= dt;
+        if (NET.snap <= 0) { NET.snap = 0.1; send({ t: 's', e: enemies.map(function (en) { return [en.id, en.type, Math.round(en.x), Math.round(en.y), +en.ang.toFixed(2), Math.round(en.hp), (en.alert ? 1 : 0) | (en.aim > 0 ? 2 : 0), en.tg || 0, Math.round(en.max)]; }) }); }
+      }
+    }
+    var ml = Math.hypot(mx, my); if (ml > 1) { mx /= ml; my /= ml; ml = 1; }
+    var over = weight() > carryCap(), sprint = keys.shift && ml > 0.1 && P.st > 0 && !over && !P.heal;
+    var sp = 175 * (over ? 0.55 : 1) * (sprint ? 1.45 : 1) * (P.heal ? 0.55 : 1);
+    if (P.roll > 0) {
+      var rs = 300 + 520 * (P.roll / 0.36); P.roll -= dt; moveEnt(P, P.rx * rs * dt, P.ry * rs * dt); P.vx = P.rx * rs; P.vy = P.ry * rs;
+      P.trail -= dt; if (P.trail <= 0) { P.trail = 0.045; fx.push({ k: 'ghost', x: P.x, y: P.y, rot: (0.36 - P.roll) / 0.36 * 6.2832, dir: P.rx * P.face < 0 ? -1 : 1, face: P.face, life: 0.22 }); dust(P.x, P.y + 12, 1); }
+      if (P.roll <= 0) { P.land = 0.16; dust(P.x, P.y + 13, 6); }
+    } else {
+      var go = ml > 0.1 ? 1 : 0, ka = Math.min(1, dt * (go ? 11 : 15));
+      P.vx += (mx * sp * go - P.vx) * ka; P.vy += (my * sp * go - P.vy) * ka;
+      moveEnt(P, P.vx * dt, P.vy * dt);
+      var vel = Math.hypot(P.vx, P.vy);
+      if (vel > 25) { P.walk += dt * vel * 0.07; P.step -= dt * vel / 175; if (P.step <= 0) { P.step = 0.26; dust(P.x - P.vx * 0.04, P.y + 13, sprint ? 2 : 1); } }
+    }
+    if (P.land > 0) P.land -= dt;
+    if (sprint) { P.st = Math.max(0, P.st - 22 * dt); P.stWait = 0.6; }
+    else if (P.stWait > 0) P.stWait -= dt; else P.st = Math.min(P.stMax, P.st + 18 * dt);
+
+    var firing = mouse.down && !UI.open && !P.down;
+    if (sticks.aim) { var al = Math.hypot(sticks.aim.dx, sticks.aim.dy); if (al > 8) P.ang = Math.atan2(sticks.aim.dy, sticks.aim.dx); firing = al > 26 && !UI.open && !P.down; }
+    else if (mouse.used) P.ang = Math.atan2(cam.y + (mouse.y - H / 2) / scale - P.y, cam.x + (mouse.x - W / 2) / scale - P.x);
+    else if (ml > 0.1) P.ang = Math.atan2(my, mx);
+    P.view += angDiff(P.ang, P.view) * Math.min(1, dt * 16);
+    P.face += ((Math.cos(P.ang) < 0 ? -1 : 1) - P.face) * Math.min(1, dt * 16);
+    P.kick *= Math.pow(0.0004, dt); P.bloom = Math.max(0, P.bloom - dt * 2.2);
+    if (P.flash > 0) P.flash -= dt; if (P.swapT > 0) P.swapT -= dt; if (hitMark > 0) hitMark -= dt;
+    if (shake > 0) shake = Math.max(0, shake - dt * 32);
+
+    if (P.cool > 0) P.cool -= dt;
+    if (P.heal) {
+      P.heal.t -= dt; if (Math.random() < dt * 7) parts.push({ x: P.x + rnd(-14, 14), y: P.y - rnd(4, 24), vx: 0, vy: -34, life: 0.7, k: 'plus' });
+      if (firing) P.heal = null;
+      else if (P.heal.t <= 0) { var hi = P.heal.it, k = save.bag.indexOf(hi); if (k >= 0) { P.hp = Math.min(P.max, P.hp + DB[hi.id].heal); floatText(P.x, P.y - 40, '+' + DB[hi.id].heal, '#8fb85a'); hi.q--; if (hi.q <= 0) save.bag.splice(k, 1); sfx('heal'); } P.heal = null; }
+    }
+    if (P.reload > 0 && g) {
+      P.reload -= dt;
+      if (P.reload <= 0) { P.reload = 0; var need = Math.min(gd.mag - g.mag, countAmmo(g.am)); g.mag += need; takeAmmo(g.am, need); }
+    } else if (firing && g && P.cool <= 0 && P.roll <= 0 && !P.heal && (gd.auto || mouse.fresh || sticks.aim)) {
+      mouse.fresh = false;
+      if (g.mag > 0) {
+        g.mag--; P.cool = gd.rate;
+        var mz = muzzle(), gx = mz.x, gy = mz.y, mv = (1 + ((ml > 0.1 ? (sprint ? 2.2 : 1.35) : 1) - 1) * gd.move) * (1 + P.bloom);
+        if (solidAt(gx, gy)) { gx = P.x + Math.cos(P.ang) * 16; gy = P.y - 4 + Math.sin(P.ang) * 16; }
+        var sa = [];
+        if (!solidAt(gx, gy)) for (i = 0; i < gd.pel; i++) { var a = P.ang + rnd(-gd.spread, gd.spread) * mv; sa.push(+a.toFixed(3)); bullets.push({ x: gx, y: gy, vx: Math.cos(a) * gd.spd, vy: Math.sin(a) * gd.spd, life: gd.pel > 1 ? 0.34 : 0.8, mine: true, dmg: gd.dmg, pen: Math.min(0.95, DB[g.am].pen + gd.pen), gr: g.gr || 0 }); }
+        sfx('shot', (gd.pel > 1 || gd.dmg > 60 ? 1.5 : 1) * (gd.noise < 300 ? 0.3 : 1));
+        if (NET.on && sa.length) send({ t: 'ev', k: 'shot', x: Math.round(gx), y: Math.round(gy), a: sa, s: Math.round(gd.spd), l: gd.pel > 1 ? 0.34 : 0.8, gr: g.gr || 0, n: Math.round(gd.noise) });
+        var hv = (gd.pel > 1 ? 5 : gd.dmg > 60 ? 6.5 : gd.auto ? 1.6 : 2.2) * gd.kick;
+        P.kick = Math.min(11, P.kick + hv * 1.7); P.bloom = Math.min(1.6, P.bloom + (gd.auto ? 0.16 : 0.3) * gd.bloom); P.flash = gd.noise < 300 ? 0.025 : 0.06; shake = Math.max(shake, hv);
+        casing(P.x + Math.cos(P.ang) * 10, P.y - 12 + Math.sin(P.ang) * 10, P.ang); P.vx -= Math.cos(P.ang) * hv * 9; P.vy -= Math.sin(P.ang) * hv * 9;
+        for (i = 0; i < enemies.length; i++) { e = enemies[i]; if (Math.hypot(e.x - P.x, e.y - P.y) < gd.noise && !e.alert) { e.mem = 4; e.lx = P.x; e.ly = P.y; } }
+        if (g.mag === 0) reloadGun();
+      } else reloadGun();
+    }
+    if (!mouse.down) mouse.fresh = true;
+
+    for (i = bullets.length - 1; i >= 0; i--) {
+      b = bullets[i]; b.life -= dt; var dead = b.life <= 0;
+      for (var s = 0; s < 3 && !dead; s++) {
+        b.x += b.vx * dt / 3; b.y += b.vy * dt / 3;
+        if (solidAt(b.x, b.y)) { spark(b.x, b.y, '#c9c2ae', 4); dead = true; break; }
+        if (b.mine) {
+          for (var j = 0; j < enemies.length; j++) {
+            e = enemies[j];
+            if (Math.hypot(e.x - b.x, e.y - 8 - b.y) < e.r + 5) {
+              if (b.ghost) { dead = true; break; }
+              var dm = b.dmg * (1 - ET[e.type].red * (1 - b.pen));
+              e.hp -= dm; e.flash = 0.1; e.kx += b.vx * 0.06; e.ky += b.vy * 0.06; hitMark = 0.14; hitKill = e.hp <= 0; e.mem = 5; e.lx = P.x; e.ly = P.y; e.reveal = Math.max(e.reveal, 0.4);
+              if (NET.on && !NET.host) send({ t: 'ev', k: 'hit', e: e.id, d: +dm.toFixed(1), kx: Math.round(b.vx * 0.06), ky: Math.round(b.vy * 0.06) });
+              floatText(e.x + rnd(-8, 8), e.y - 44, String(Math.round(dm)), b.pen > 0.3 ? '#9fd0ff' : '#ffe09a'); spark(b.x, b.y, '#d9553f', 5); sfx('hit'); dead = true; break;
+            }
+          }
+        } else if (Math.hypot(P.x - b.x, P.y - 6 - b.y) < P.r + 3) { hurt(b.dmg, b.pen); dead = true; }
+      }
+      if (dead) bullets.splice(i, 1);
+    }
+
+    for (i = enemies.length - 1; i >= 0; i--) {
+      e = enemies[i];
+      if (e.flash > 0) e.flash -= dt; if (e.kick > 0) e.kick -= dt; if (e.mflash > 0) e.mflash -= dt;
+      if (NET.on && !NET.host) {
+        var ex = e.nx - e.x, ey = e.ny - e.y, el = Math.min(1, dt * 10);
+        if (Math.abs(ex) + Math.abs(ey) > 1.5) e.walk += dt * 10;
+        e.x += ex * el; e.y += ey * el; e.ang += angDiff(e.na, e.ang) * el;
+        e.face += ((Math.cos(e.ang) < 0 ? -1 : 1) - e.face) * Math.min(1, dt * 12);
+        e.vis = seenByMe(e); if (e.reveal > 0) { e.reveal -= dt; e.vis = true; } if (e.aim > 0) e.vis = true;
+        continue;
+      }
+      if (e.hp <= 0) { killEnemy(e); enemies.splice(i, 1); continue; }
+      var t = ET[e.type], eg = DB[t.gun];
+      if (e.cool > 0) e.cool -= dt;
+      if (e.kx || e.ky) { moveEnt(e, e.kx * dt, e.ky * dt); var kd = Math.pow(0.002, dt); e.kx *= kd; e.ky *= kd; if (Math.abs(e.kx) + Math.abs(e.ky) < 3) e.kx = e.ky = 0; }
+      e.face += ((Math.cos(e.ang) < 0 ? -1 : 1) - e.face) * Math.min(1, dt * 12);
+      var TG = pickTarget(e); d = Math.hypot(TG.x - e.x, TG.y - e.y);
+      var sight = t.sight || (e.alert ? 480 : 370), sees = !TG.down && d < sight && los(e.x, e.y, TG.x, TG.y);
+      e.vis = seenByMe(e);
+      if (e.reveal > 0) { e.reveal -= dt; e.vis = true; }
+      if (sees) { if (!e.alert) e.cool = Math.max(e.cool, 0.6); e.alert = true; e.mem = 4; e.lx = TG.x; e.ly = TG.y; }
+      else if (e.mem > 0) { e.mem -= dt; if (e.mem <= 0) e.alert = false; }
+      var gx2 = 0, gy2 = 0, es = 60;
+      if (e.mem > 0) {
+        var ta = Math.atan2(e.ly - e.y, e.lx - e.x), dl = Math.hypot(e.lx - e.x, e.ly - e.y);
+        e.ang += angDiff(sees ? Math.atan2(TG.y - e.y, TG.x - e.x) : ta, e.ang) * Math.min(1, dt * 8);
+        es = t.spd;
+        if (!sees) { if (dl > 30) { gx2 = Math.cos(ta); gy2 = Math.sin(ta); } }
+        else if (d > t.pd + 50) { gx2 = Math.cos(ta); gy2 = Math.sin(ta); }
+        else if (d < t.pd - 60) { gx2 = -Math.cos(ta); gy2 = -Math.sin(ta); }
+        else { gx2 = -Math.sin(ta) * e.strafe * 0.6; gy2 = Math.cos(ta) * e.strafe * 0.6; }
+        if (t.aim) {
+          if (!sees) e.aim = 0;
+          else if (e.aim > 0) { gx2 = gy2 = 0; e.aim -= dt; e.reveal = 0.2; if (e.aim <= 0) { fireEnemy(e, t, eg, TG); e.cool = rnd(t.gap[0], t.gap[1]); } }
+          else if (e.cool <= 0) e.aim = t.aim;
+        } else if (sees && e.cool <= 0) {
+          fireEnemy(e, t, eg, TG); e.burst--;
+          if (e.burst > 0) e.cool = Math.max(eg.rate, 0.11); else { e.burst = t.burst; e.cool = rnd(t.gap[0], t.gap[1]); if (Math.random() < 0.3) e.strafe *= -1; }
+        }
+      } else {
+        var pd = Math.hypot(e.tx - e.x, e.ty - e.y);
+        if (pd < 12 || e.stuck > 1.2) { var hx = e.home ? e.home.x : e.x, hy = e.home ? e.home.y : e.y, rr = e.home ? 130 : 260; e.tx = hx + rnd(-rr, rr); e.ty = hy + rnd(-rr, rr); e.stuck = 0; }
+        var pa = Math.atan2(e.ty - e.y, e.tx - e.x); gx2 = Math.cos(pa); gy2 = Math.sin(pa);
+        e.ang += angDiff(pa, e.ang) * Math.min(1, dt * 5);
+      }
+      if (gx2 || gy2) {
+        var ox = e.x, oy = e.y; moveEnt(e, gx2 * es * dt, gy2 * es * dt);
+        if (Math.hypot(e.x - ox, e.y - oy) < es * dt * 0.4) { e.stuck += dt; if (e.mem > 0 && e.stuck > 0.5) { e.strafe *= -1; moveEnt(e, -gy2 * es * dt * e.strafe, gx2 * es * dt * e.strafe); } }
+        else e.stuck = Math.max(0, e.stuck - dt);
+        e.walk += dt * 10;
+      }
+    }
+
+    if (UI.open && UI.other) {
+      var ob = UI.other;
+      if (Math.hypot(ob.x - P.x, ob.y - P.y) > 80) closeInv();
+      else if (ob.rev < ob.items.length) { ob.st += dt; if (ob.st >= 0.45) { ob.st = 0; ob.rev++; ob.popAt = clock; sfx('click'); renderInv(); } }
+    }
+    for (i = boxes.length - 1; i >= 0; i--) { b = boxes[i]; if ((b.kind === 'body' || b.kind === 'drop' || b.kind === 'mine') && !b.items.length && UI.other !== b) { if (b.kind === 'mine') save.corpse = null; boxes.splice(i, 1); } }
+
+    if (portal) { if (Math.hypot(portal.x - P.x, portal.y - P.y) < 62) { portT += dt; if (portT >= 3) { sfx('heal'); enterZone(zone + 1); return; } } else portT = Math.max(0, portT - dt * 2); }
+    var onExt = exts.some(function (x) { return Math.hypot(x.x - P.x, x.y - P.y) < 66; });
+    if (onExt) { extT += dt; if (extT >= 4) return finish(true); } else extT = Math.max(0, extT - dt * 2);
+
+    for (i = parts.length - 1; i >= 0; i--) {
+      var p = parts[i]; p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.k === 'shell') { p.vz -= 560 * dt; p.z += p.vz * dt; p.rot += dt * 14; if (p.z < 0) { p.z = 0; p.vz *= -0.4; p.vx *= 0.45; p.vy *= 0.45; } }
+      if (p.life <= 0) parts.splice(i, 1);
+    }
+    for (i = fx.length - 1; i >= 0; i--) { fx[i].life -= dt; if (fx[i].life <= 0) fx.splice(i, 1); }
+    for (i = texts.length - 1; i >= 0; i--) { texts[i].life -= dt; texts[i].y -= 26 * dt; if (texts[i].life <= 0) texts.splice(i, 1); }
+    var la = 70; if (mouse.used && !sticks.aim) la = Math.min(130, Math.hypot(mouse.x - W / 2, mouse.y - H / 2) / scale * 0.3);
+    cam.x += (P.x + Math.cos(P.ang) * la - cam.x) * Math.min(1, dt * 5);
+    cam.y += (P.y + Math.sin(P.ang) * la - cam.y) * Math.min(1, dt * 5);
+    if (P.hp <= 0) {
+      if (NET.on && mates() > 0 && !P.down) { P.down = 25; P.hp = 1; P.heal = null; closeInv(); toast('쓰러졌습니다. 동료가 옆에서 F를 누르면 일어납니다.'); send({ t: 'ev', k: 'msg', s: '님이 쓰러졌습니다. 가까이 가서 F로 일으키세요.' }); }
+      else if (!P.down) return finish(false);
+    }
+    hud();
+  }
+
+  function carried() { var l = save.bag.slice(); EQ.forEach(function (e) { if (save.eq[e[0]]) l.push(save.eq[e[0]]); }); return l; }
+  function finish(win) {
+    if (NET.on) { send({ t: 'ev', k: 'msg', s: win ? '님이 온천으로 귀환했습니다.' : '님이 쓰러져 야영지로 돌아갔습니다.' }); send({ t: 'zone', z: -1 }); }
+    R = {}; NET.wait = false;
+    state = 'base'; save.raids++;
+    var all = carried(), val = 0; all.forEach(function (i) { val += sellOf(i); });
+    if (win) {
+      inc('wins'); if (zone === 1) inc('w2'); if (zone === 2) inc('w3');
+      if (save.corpse && !save.corpse.items.length) save.corpse = null;
+      UI.report = '<div class="report"><b>' + (zone + 1) + '구역에서 귀환 성공.</b> ' + Math.floor(clock / 60) + '분 ' + Math.floor(clock % 60) + '초 동안 악어 ' + P.kills + '마리를 처치했습니다. 들고 온 물건의 판매가는 약 ' + val + '냥입니다.</div>';
+    } else {
+      var had = save.corpse && save.corpse.items.length;
+      save.corpse = all.length ? { x: P.x, y: P.y, zone: zone, items: all } : null; save.eq = {}; save.bag = [];
+      UI.report = '<div class="report lost"><b>쓰러졌습니다.</b> 장비 ' + all.length + '개가 ' + (zone + 1) + '구역의 쓰러진 자리에 남았습니다.' + (had ? ' 이전에 남겨 둔 장비는 사라졌습니다.' : '') + '</div>';
+    }
+    UI.tab = 'stash'; UI.other = null; UI.sel = null; shopCache = null;
+    persist(); hud(); toastEl.hidden = true; renderInv();
+  }
+
+  function hud() {
+    var g = cur() || save.eq.w1 || save.eq.w2, a = save.eq.armor, h = save.eq.helmet;
+    if (P) {
+      var hp = Math.max(0, P.hp) / P.max;
+      $('hpFill').style.width = (hp * 100) + '%'; $('hpFill').style.background = hp < 0.35 ? 'var(--blood)' : 'var(--moss)';
+      $('stFill').style.width = (P.st / P.stMax * 100) + '%';
+    }
+    $('armor').textContent = (a ? Math.round(a.dur) : 0) + ' / ' + (h ? Math.round(h.dur) : 0);
+    $('gun').textContent = g ? DB[g.id].n + ' ' + (P && P.reload ? '장전 중' : g.mag + '/' + countAmmo(g.am)) + (DB[g.am].pen > 0.3 ? ' 철갑' : '') : '무기 없음';
+    $('wt').textContent = weight().toFixed(1) + '/' + carryCap() + 'kg';
+    $('clock').textContent = (state === 'raid' ? (zone + 1) + '구역 ' : '') + Math.floor(clock / 60) + ':' + ('0' + Math.floor(clock % 60)).slice(-2);
+  }
+
+  /* ---------- drawing ---------- */
+  var IMG = {}, PAT = {}, TEX = { grass: 0.6, plank: 0.5, wall: 0.39 };
+  ['capy', 'capy2', 'croc', 'raider', 'marks', 'brute', 'boss', 'crate', 'open', 'wcase', 'medbox', 'sack', 'onsen', 'bush', 'grass', 'plank', 'wall', 'boss1', 'boss2'].concat(Object.keys(DB).filter(function (k) { return DB[k].t === 'gun'; }).map(function (k) { return 'g_' + k; })).forEach(function (n) {
+    var im = new Image();
+    im.onload = function () { IMG[n] = im; if (TEX[n]) { var pt = ctx.createPattern(im, 'repeat'); try { pt.setTransform(new DOMMatrix().scale(TEX[n])); } catch (e) {} PAT[n] = pt; } };
+    im.src = 'img/' + (n.indexOf('g_') === 0 ? 'ic_' + DB[n.slice(2)].ic : n) + (TEX[n] ? '.jpg' : '.png');
+  });
+  function applyCam(c) { c.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * (W / 2 - (cam.x + shX) * scale), dpr * (H / 2 - (cam.y + shY) * scale)); }
+  function star(c, x, y, r) { c.beginPath(); for (var i = 0; i < 10; i++) { var a = i / 10 * 6.2832, rr = i % 2 ? r * 0.38 : r * (0.75 + Math.random() * 0.5); c.lineTo(x + Math.cos(a) * rr * 1.25, y + Math.sin(a) * rr * 0.8); } c.fill(); }
+  function back(t) { var c = 1.70158; t = Math.min(1, Math.max(0, t)) - 1; return 1 + (c + 1) * t * t * t + c * t * t; }
+  function ell(c, x, y, rx, ry) { c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 6.2832); c.fill(); }
+  function drawMap() {
+    var hw = W / 2 / scale, hh = H / 2 / scale;
+    var x0 = Math.max(0, Math.floor((cam.x - hw) / T)), x1 = Math.min(MW - 1, Math.floor((cam.x + hw) / T)), y0 = Math.max(0, Math.floor((cam.y - hh) / T)), y1 = Math.min(MH - 1, Math.floor((cam.y + hh) / T));
+    ctx.fillStyle = PAT.grass || '#566540'; ctx.fillRect(x0 * T, y0 * T, (x1 - x0 + 1) * T, (y1 - y0 + 1) * T);
+    for (var ty = y0; ty <= y1; ty++) for (var tx = x0; tx <= x1; tx++) {
+      var s = solid[idx(tx, ty)], px = tx * T, py = ty * T;
+      if (floorT[idx(tx, ty)]) { ctx.fillStyle = PAT.plank || '#8b7a5a'; ctx.fillRect(px, py, T + 1, T + 1); }
+      if (s === 1) {
+        ctx.fillStyle = PAT.wall || '#7d7566'; ctx.fillRect(px, py, T + 1, T + 1);
+        if (ty + 1 < MH && solid[idx(tx, ty + 1)] !== 1) { ctx.fillStyle = 'rgba(38,34,28,0.72)'; ctx.fillRect(px, py + T - 12, T + 1, 12); }
+        if (ty > 0 && solid[idx(tx, ty - 1)] !== 1) { ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(px, py, T + 1, 3); }
+      } else if (s === 2) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ell(ctx, px + 27, py + 34, 27, 20);
+        if (IMG.bush) { ctx.save(); ctx.translate(px + 25, py + 52); ctx.rotate(RM ? 0 : Math.sin(clock * 1.3 + tx * 1.7 + ty * 0.9) * 0.028); ctx.drawImage(IMG.bush, -33, -62, 66, 64); ctx.restore(); } else { ctx.fillStyle = '#2f4a2c'; ell(ctx, px + 25, py + 25, 26, 24); }
+      }
+    }
+  }
+  function drawOnsen(x) {
+    if (IMG.onsen) ctx.drawImage(IMG.onsen, x.x - 85, x.y - 70, 170, 137); else { ctx.fillStyle = '#3f9c95'; ell(ctx, x.x, x.y, 60, 54); }
+    ctx.fillStyle = 'rgba(240,252,249,0.3)';
+    for (var k = 0; k < 4; k++) { var pk = (clock * 0.5 + k * 0.25) % 1; ell(ctx, x.x - 24 + k * 16 + Math.sin(clock + k) * 4, x.y - 6 - pk * 46, 7 + pk * 7, 5 + pk * 5); }
+  }
+  function drawPortal(p) {
+    ctx.save(); ctx.translate(p.x, p.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ell(ctx, 0, 30, 34, 10);
+    for (var i = 0; i < 4; i++) {
+      ctx.strokeStyle = 'rgba(' + (150 + i * 25) + ',110,255,' + (0.9 - i * 0.18) + ')'; ctx.lineWidth = 5 - i; ctx.beginPath();
+      ctx.ellipse(0, -8, 30 - i * 6 + Math.sin(clock * 3 + i) * 2, 44 - i * 9 + Math.cos(clock * 2.4 + i) * 2, Math.sin(clock * 0.8 + i) * 0.15, 0, 6.2832); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    var g = ctx.createRadialGradient(0, -8, 2, 0, -8, 40); g.addColorStop(0, 'rgba(210,180,255,0.7)'); g.addColorStop(1, 'rgba(120,70,255,0)'); ctx.fillStyle = g; ell(ctx, 0, -8, 30, 44);
+    for (i = 0; i < 6; i++) { var a = clock * 1.6 + i * 1.047, rr = 38 + Math.sin(clock * 2 + i) * 6; ctx.fillStyle = 'rgba(200,170,255,0.8)'; ell(ctx, Math.cos(a) * rr * 0.8, -8 + Math.sin(a) * rr * 1.1, 2, 2); }
+    ctx.globalCompositeOperation = 'source-over'; ctx.restore();
+  }
+  function drawBox(b) {
+    var im, w, h, empty = b.rev > 0 && !b.items.length;
+    if (b.kind === 'crate') { im = b.rev > 0 ? IMG.open || IMG.crate : IMG.crate; w = 50; h = 48; }
+    else if (b.kind === 'wcase' || b.kind === 'boss' || b.kind === 'elite') { im = IMG.wcase || IMG.crate; w = b.kind === 'wcase' ? 56 : 64; h = w * 0.78; }
+    else if (b.kind === 'med') { im = IMG.medbox || IMG.crate; w = 42; h = 38; }
+    else { im = IMG.sack; w = 30; h = 30; }
+    var sc = 1, sy = 1;
+    if (b.born != null) { var age = clock - b.born; if (age < 0) return; if (age < 0.3) sc = 0.3 + 0.7 * back(age / 0.3); }
+    if (b.popAt != null && clock - b.popAt < 0.18) { var pp = (clock - b.popAt) / 0.18; sy = 1 + Math.sin(pp * Math.PI) * 0.14; }
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ell(ctx, b.x, b.y + h * 0.36, w * 0.48 * sc, h * 0.2 * sc);
+    ctx.save(); ctx.translate(b.x, b.y + h * 0.4); ctx.scale(sc * (2 - sy), sc * sy);
+    ctx.globalAlpha = empty ? 0.5 : 1;
+    if (im) ctx.drawImage(im, -w / 2, -h, w, h); else { ctx.fillStyle = '#a67c45'; ctx.fillRect(-w / 2, -h, w, h); }
+    ctx.restore(); ctx.globalAlpha = 1;
+    if (b.kind === 'mine') { ctx.strokeStyle = '#f2a531'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y - 2, 22 + Math.sin(clock * 4) * 2, 0, 6.2832); ctx.stroke(); }
+  }
+  function drawGun(p, g, ax, bob) {
+    if (!g || p.heal) return;
+    var im = IMG['g_' + g.id], len = GLEN[g.id], hh = im ? len * im.height / im.width : 6, sg = ax < 0 ? -1 : 1, rot = p.ang - sg * p.kick * 0.014, off = 5 - p.kick;
+    if (p.reload > 0) { var rp = 1 - p.reload / gstat(g).reload; rot += sg * Math.sin(rp * Math.PI) * 0.85; off -= Math.sin(rp * Math.PI * 4) * 2.5; }
+    if (p.swapT > 0) rot += sg * back(p.swapT / 0.25) * 1.3;
+    ctx.save(); ctx.translate(p.x, p.y - 12 - bob * 0.6); ctx.rotate(rot); if (sg < 0) ctx.scale(1, -1);
+    if (im) ctx.drawImage(im, off, -hh * 0.42, len, hh); else { ctx.fillStyle = '#23262b'; ctx.fillRect(off, -3, len, 6); }
+    var md = g.mods || {}; ctx.fillStyle = '#17191c';
+    if (md.muzzle) { ctx.fillRect(off + len - 2, -hh * 0.2 - 1, 12, 3.6); off += 10; }
+    if (md.sight) ctx.fillRect(off + len * 0.3 - (md.muzzle ? 10 : 0), -hh * 0.42 - 3.5, md.sight === 'm_scope' ? 15 : 6, 4);
+    if (md.grip) ctx.fillRect(off + len * 0.55 - (md.muzzle ? 10 : 0), hh * 0.1, 3.5, 8);
+    if (p.flash > 0) {
+      var fr = (g.id === 'shotgun' || g.id === 'sniper' ? 17 : 11) * (0.6 + p.flash / 0.06 * 0.5);
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,196,90,0.9)'; star(ctx, off + len + fr * 0.7, -hh * 0.1, fr);
+      ctx.fillStyle = 'rgba(255,250,220,0.95)'; ell(ctx, off + len + fr * 0.4, -hh * 0.1, fr * 0.45, fr * 0.3); ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+  }
+  function drawCapy(p) {
+    var ax = Math.cos(p.ang), ay = Math.sin(p.ang), mv = Math.min(1, Math.hypot(p.vx, p.vy) / 175), rolling = p.roll > 0, g = cur();
+    var bob = rolling ? 0 : Math.abs(Math.sin(p.walk)) * 3.5 * mv, sq = 1 + Math.sin(p.walk * 2) * 0.05 * mv + Math.sin(clock * 2.6) * 0.016 * (1 - mv);
+    if (p.land > 0) sq *= 1 - 0.2 * (p.land / 0.16);
+    var im = (g && IMG.capy2) || IMG.capy, hh = 62, w = im ? hh * im.width / im.height : 55, f = Math.abs(p.face) < 0.1 ? (p.face < 0 ? -0.1 : 0.1) : p.face, behind = ay < -0.35;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ell(ctx, p.x, p.y + 14, 18 - bob, 7 - bob * 0.3);
+    if (!rolling && behind) drawGun(p, g, ax, bob);
+    ctx.save(); ctx.translate(p.x - ax * p.kick * 0.3, p.y - bob - ay * p.kick * 0.3); ctx.scale(f, 1);
+    if (rolling) { ctx.translate(0, -14); ctx.rotate((0.36 - p.roll) / 0.36 * 6.2832 * (p.rx * p.face < 0 ? -1 : 1)); ctx.scale(0.86, 0.86); ctx.translate(0, 14); }
+    else { ctx.rotate(Math.max(-0.12, Math.min(0.12, p.vx * (p.face < 0 ? -1 : 1) * 0.0005))); ctx.translate(0, 16); ctx.scale(2 - sq, sq); ctx.translate(0, -16); }
+    if (hurtFlash > 0.15) ctx.globalAlpha = 0.6;
+    if (im) ctx.drawImage(im, -w / 2, -46, w, hh); else { ctx.fillStyle = '#a8733a'; ell(ctx, 0, -8, 18, 20); }
+    ctx.restore();
+    if (!rolling && !behind) drawGun(p, g, ax, bob);
+  }
+  function drawCroc(e) {
+    var t = ET[e.type], im = IMG[t.img] || IMG[t.alt] || IMG.croc, hh = t.h, w = im ? hh * im.width / im.height : hh * 0.9, bob = Math.abs(Math.sin(e.walk)) * 3;
+    var sq = 1 + Math.sin(e.walk * 2) * 0.04 + Math.sin(clock * 2.3 + e.x) * 0.012, f = Math.abs(e.face) < 0.1 ? (e.face < 0 ? -0.1 : 0.1) : e.face, kb = e.kick > 0 ? e.kick / 0.1 * 4 : 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ell(ctx, e.x, e.y + 15, w * 0.34, 7);
+    ctx.save(); ctx.translate(e.x, e.y - bob); ctx.scale(f, 1); ctx.translate(-kb, 18); ctx.rotate(-kb * 0.012); ctx.scale(2 - sq, sq); ctx.translate(0, -18);
+    if (im) {
+      ctx.drawImage(im, -w / 2, -hh + 18, w, hh);
+      if (e.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.75; ctx.drawImage(im, -w / 2, -hh + 18, w, hh); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+    } else { ctx.fillStyle = '#5d8a4a'; ell(ctx, 0, -10, 16, 24); }
+    if (e.mflash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,170,90,0.9)'; star(ctx, w / 2 + 8, -hh * 0.6 + 18, 11); ctx.globalCompositeOperation = 'source-over'; }
+    ctx.restore();
+    if (e.hp < e.max) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(e.x - 18, e.y - hh + 8, 36, 5); ctx.fillStyle = t.big ? '#e0b040' : '#d9553f'; ctx.fillRect(e.x - 17, e.y - hh + 9, 34 * Math.max(0, e.hp / e.max), 3); }
+    if (t.big) { ctx.font = '600 12px "IBM Plex Sans KR", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#10130c'; ctx.fillText(t.n, e.x + 1, e.y - hh + 3); ctx.fillStyle = '#e0b040'; ctx.fillText(t.n, e.x, e.y - hh + 2); }
+    else if (e.alert) { ctx.font = '700 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#10130c'; ctx.fillText('!', e.x + 1, e.y - hh + 5); ctx.fillStyle = '#ffcf3d'; ctx.fillText('!', e.x, e.y - hh + 4); }
+  }
+  function drawMate(rp) {
+    if (rp.fresh) return;
+    var im = IMG.capy2 || IMG.capy, hh = 62, w = im ? hh * im.width / im.height : 55, bob = Math.abs(Math.sin(rp.walk)) * 3, f = Math.abs(rp.face) < 0.1 ? 0.1 : rp.face, ax = Math.cos(rp.ang);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ell(ctx, rp.x, rp.y + 14, 18, 7);
+    ctx.save(); ctx.translate(rp.x, rp.y - (rp.down ? 0 : bob)); ctx.scale(f, 1);
+    if (rp.down) { ctx.translate(0, 6); ctx.rotate(-1.45); ctx.globalAlpha = 0.85; }
+    else if (rp.roll > 0) { ctx.translate(0, -14); ctx.rotate((0.36 - rp.roll) / 0.36 * 6.2832); ctx.scale(0.86, 0.86); ctx.translate(0, 14); }
+    if (im) ctx.drawImage(im, -w / 2, -46, w, hh);
+    ctx.restore();
+    var gi = IMG['g_' + rp.g];
+    if (gi && !rp.down && rp.roll <= 0) {
+      var len = GLEN[rp.g] || 30, gh = len * gi.height / gi.width;
+      ctx.save(); ctx.translate(rp.x, rp.y - 12 - bob * 0.6); ctx.rotate(rp.ang); if (ax < 0) ctx.scale(1, -1);
+      ctx.drawImage(gi, 5, -gh * 0.42, len, gh);
+      if (rp.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,196,90,0.9)'; star(ctx, len + 12, -gh * 0.1, 10); ctx.globalCompositeOperation = 'source-over'; }
+      ctx.restore();
+    }
+  }
+  function drawFx(o) {
+    if (o.k === 'ghost') {
+      var im = IMG.capy2 || IMG.capy; if (!im) return; var hh = 62, w = hh * im.width / im.height;
+      ctx.save(); ctx.globalAlpha = o.life / 0.22 * 0.32; ctx.translate(o.x, o.y); ctx.scale(o.face < 0 ? -1 : 1, 1); ctx.translate(0, -14); ctx.rotate(o.rot * o.dir); ctx.scale(0.86, 0.86); ctx.translate(0, 14);
+      ctx.drawImage(im, -w / 2, -46, w, hh); ctx.restore();
+    } else if (o.k === 'die') {
+      var t = ET[o.type], im2 = IMG[t.img] || IMG[t.alt] || IMG.croc; if (!im2) return; var h2 = t.h, w2 = h2 * im2.width / im2.height, pr = 1 - o.life / 0.55;
+      ctx.save(); ctx.globalAlpha = Math.min(1, o.life / 0.25); ctx.translate(o.x, o.y + 14); ctx.scale(o.face < 0 ? -1 : 1, 1); ctx.rotate(-Math.min(1, pr * 1.8) * 1.45); ctx.translate(-pr * 6, -14);
+      ctx.drawImage(im2, -w2 / 2, -h2 + 18, w2, h2); ctx.restore();
+    }
+  }
+  function drawMini() {
+    var s = Math.min(2.6, (W * 0.3) / MW), mw = MW * s, mh = MH * s, ox = W - mw - 10, oy = 10, i;
+    ctx.fillStyle = 'rgba(14,16,10,0.7)'; ctx.fillRect(ox - 3, oy - 3, mw + 6, mh + 6);
+    for (var ty = 0; ty < MH; ty++) for (var tx = 0; tx < MW; tx++) {
+      var k = idx(tx, ty); if (!seen[k]) continue;
+      ctx.fillStyle = solid[k] === 1 ? '#9a917f' : solid[k] === 2 ? '#3f6238' : floorT[k] ? '#6b5c40' : '#3d4a2e';
+      ctx.fillRect(ox + tx * s, oy + ty * s, s + 0.5, s + 0.5);
+    }
+    ctx.fillStyle = '#7fd0c4'; for (i = 0; i < exts.length; i++) { ctx.beginPath(); ctx.arc(ox + exts[i].x / T * s, oy + exts[i].y / T * s, 3.5, 0, 6.2832); ctx.fill(); }
+    if (portal) { ctx.fillStyle = '#b08cff'; ctx.beginPath(); ctx.arc(ox + portal.x / T * s, oy + portal.y / T * s, 3.5, 0, 6.2832); ctx.fill(); }
+    if (save.corpse && (save.corpse.zone || 0) === zone) { ctx.fillStyle = '#f2a531'; ctx.fillRect(ox + save.corpse.x / T * s - 3, oy + save.corpse.y / T * s - 3, 6, 6); }
+    for (var mm in R) { if (R[mm].fresh) continue; ctx.fillStyle = MCOL[R[mm].id % MCOL.length]; ctx.beginPath(); ctx.arc(ox + R[mm].x / T * s, oy + R[mm].y / T * s, 2.8, 0, 6.2832); ctx.fill(); }
+    for (i = 0; i < pings.length; i++) { ctx.strokeStyle = pings[i].c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ox + pings[i].x / T * s, oy + pings[i].y / T * s, 4, 0, 6.2832); ctx.stroke(); }
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ox + P.x / T * s, oy + P.y / T * s, 2.5, 0, 6.2832); ctx.fill();
+    if (NET.on) { ctx.font = '600 12px "IBM Plex Sans KR", sans-serif'; ctx.textAlign = 'left'; var ry = 22; NET.players.forEach(function (pl) { if (pl.id === NET.id) return; ctx.fillStyle = '#10130c'; ctx.fillText(pl.name + ' · ' + (pl.zone < 0 ? '야영지' : (pl.zone + 1) + '구역'), 13, ry + 1); ctx.fillStyle = MCOL[pl.id % MCOL.length]; ctx.fillText(pl.name + ' · ' + (pl.zone < 0 ? '야영지' : (pl.zone + 1) + '구역'), 12, ry); ry += 17; }); }
+  }
+
+  function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0a0c08'; ctx.fillRect(0, 0, cv.width, cv.height);
+    if (!P) return;
+    shX = RM ? 0 : (Math.random() - 0.5) * shake; shY = RM ? 0 : (Math.random() - 0.5) * shake; ctx.lineCap = 'round';
+    applyCam(ctx); drawMap();
+    if (ZONES[zone].tint) { ctx.fillStyle = ZONES[zone].tint; ctx.fillRect(cam.x - W / scale, cam.y - H / scale, 2 * W / scale, 2 * H / scale); }
+    var i; exts.forEach(drawOnsen); if (portal) drawPortal(portal);
+    for (i = 0; i < parts.length; i++) { var dp = parts[i]; if (dp.k !== 'dust') continue; ctx.globalAlpha = dp.life / 0.45 * 0.4; ctx.fillStyle = '#d8d2b8'; ell(ctx, dp.x, dp.y, dp.r * (1.9 - dp.life * 2), dp.r * (1.9 - dp.life * 2) * 0.7); }
+    ctx.globalAlpha = 1;
+    var order = [{ y: P.y, f: drawCapy, o: P }];
+    fx.forEach(function (o) { order.push({ y: o.y - 1, f: drawFx, o: o }); });
+    for (var mk2 in R) order.push({ y: R[mk2].y, f: drawMate, o: R[mk2] });
+    boxes.forEach(function (b) { order.push({ y: b.y - 6, f: drawBox, o: b }); });
+    for (i = 0; i < enemies.length; i++) if (enemies[i].vis) order.push({ y: enemies[i].y, f: drawCroc, o: enemies[i] });
+    order.sort(function (a, b) { return a.y - b.y; });
+    for (i = 0; i < order.length; i++) order[i].f(order[i].o);
+    for (i = 0; i < bullets.length; i++) { var b = bullets[i]; if (!b.mine) continue; ctx.strokeStyle = GTR[b.gr] || (b.pen > 0.3 ? '#bfe0ff' : '#ffe09a'); ctx.lineWidth = b.gr > 2 ? 3.2 : 2.5; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * 0.03, b.y - b.vy * 0.03); ctx.stroke(); }
+    for (i = 0; i < parts.length; i++) {
+      var p = parts[i]; if (p.k === 'dust') continue;
+      ctx.globalAlpha = Math.min(1, p.life * 3);
+      if (p.k === 'shell') { ctx.save(); ctx.translate(p.x, p.y - p.z); ctx.rotate(p.rot); ctx.fillStyle = '#e0b040'; ctx.fillRect(-3, -1.3, 6, 2.6); ctx.restore(); }
+      else if (p.k === 'plus') { ctx.fillStyle = '#8fb85a'; ctx.fillRect(p.x - 4, p.y - 1.3, 8, 2.6); ctx.fillRect(p.x - 1.3, p.y - 4, 2.6, 8); }
+      else { ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    }
+    ctx.globalAlpha = 1;
+
+    fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.globalCompositeOperation = 'source-over'; fctx.clearRect(0, 0, fog.width, fog.height);
+    fctx.fillStyle = 'rgba(6,8,6,0.74)'; fctx.fillRect(0, 0, fog.width, fog.height);
+    fctx.globalCompositeOperation = 'destination-out'; applyCam(fctx);
+    var g = fctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, VR);
+    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.72, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    fctx.fillStyle = g; fctx.beginPath();
+    for (i = 0; i < 240; i++) { var a = i / 240 * 6.2832, rel = Math.abs(angDiff(a, P.view)), mr = rel < 1 ? VR : rel < 1.3 ? VR + (NR - VR) * (rel - 1) / 0.3 : NR, d = castRay(P.x, P.y, a, mr); fctx.lineTo(P.x + Math.cos(a) * d, P.y + Math.sin(a) * d); }
+    fctx.fill(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(fog, 0, 0);
+
+    applyCam(ctx);
+    for (i = 0; i < bullets.length; i++) { var eb = bullets[i]; if (eb.mine) continue; ctx.strokeStyle = '#ff8a6a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(eb.x, eb.y); ctx.lineTo(eb.x - eb.vx * 0.03, eb.y - eb.vy * 0.03); ctx.stroke(); }
+    for (i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.aim > 0) { ctx.strokeStyle = 'rgba(255,70,50,' + (0.35 + 0.6 * (1 - e.aim / 0.95)) + ')'; ctx.lineWidth = 1.5; ctx.beginPath(); var lt = NET.on && e.tg !== NET.id && R[e.tg] ? R[e.tg] : P; ctx.moveTo(e.x, e.y - 14); ctx.lineTo(lt.x, lt.y - 6); ctx.stroke(); }
+    }
+    ctx.font = '600 13px "IBM Plex Sans KR", sans-serif'; ctx.textAlign = 'center';
+    for (var mk3 in R) {
+      var mt = R[mk3]; if (mt.fresh) continue;
+      var mc = MCOL[mt.id % MCOL.length], ml3 = mt.down ? mt.name + ' · 기절 (F)' : mt.name;
+      ctx.fillStyle = '#10130c'; ctx.fillText(ml3, mt.x + 1, mt.y - 55); ctx.fillStyle = mt.down ? '#ff8566' : mc; ctx.fillText(ml3, mt.x, mt.y - 56);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(mt.x - 18, mt.y - 52, 36, 5); ctx.fillStyle = mt.hp < 0.35 ? '#d9553f' : '#8fb85a'; ctx.fillRect(mt.x - 17, mt.y - 51, 34 * Math.max(0, Math.min(1, mt.hp)), 3);
+    }
+    for (var pi = 0; pi < pings.length; pi++) {
+      var pg = pings[pi], pr2 = 10 + ((clock * 1.4) % 1) * 16;
+      ctx.globalAlpha = Math.min(1, pg.life); ctx.strokeStyle = pg.c; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(pg.x, pg.y, pr2, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = pg.c; ctx.beginPath(); ctx.arc(pg.x, pg.y, 5, 0, 6.2832); ctx.fill(); if (pg.n) ctx.fillText(pg.n, pg.x, pg.y - 22); ctx.globalAlpha = 1;
+    }
+    var nb = UI.open ? null : nearBox();
+    if (nb) { ctx.fillStyle = '#10130c'; ctx.fillText('F ' + nb.title, nb.x + 1, nb.y - 37); ctx.fillStyle = '#f2a531'; ctx.fillText('F ' + nb.title, nb.x, nb.y - 38); }
+    function ring(t, max, c, label) { ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(P.x, P.y - 8, 30, 0, 6.2832); ctx.stroke(); ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(P.x, P.y - 8, 30, -1.5708, -1.5708 + t / max * 6.2832); ctx.stroke(); ctx.fillStyle = '#ece6d2'; ctx.fillText(label, P.x, P.y - 48); }
+    if (P.down > 0) ring(P.down, 25, '#ff8566', '기절 · 동료를 기다리는 중 ' + Math.ceil(P.down));
+    else if (P.rev) ring(P.rev.t, 2.5, '#8fb85a', '일으키는 중');
+    else if (portT > 0) ring(portT, 3, '#b08cff', (zone + 2) + '구역으로 이동 중');
+    else if (extT > 0) ring(extT, 4, '#7fd0c4', '온천에 몸을 담그는 중');
+    else if (P.heal) ring(P.heal.max - P.heal.t, P.heal.max, '#8fb85a', '치료 중');
+    else if (P.reload > 0 && cur()) { var rl = gstat(cur()).reload; ring(rl - P.reload, rl, '#f2a531', '장전 중'); }
+    for (i = 0; i < texts.length; i++) { var tx = texts[i]; ctx.globalAlpha = Math.min(1, tx.life * 2); ctx.fillStyle = '#10130c'; ctx.fillText(tx.t, tx.x + 1, tx.y + 1); ctx.fillStyle = tx.c; ctx.fillText(tx.t, tx.x, tx.y); }
+    ctx.globalAlpha = 1;
+    function arrow(tg, label, col, rad) {
+      var dd = Math.hypot(tg.x - P.x, tg.y - P.y); if (dd < 170) return;
+      var ca = Math.atan2(tg.y - P.y, tg.x - P.x), cx = P.x + Math.cos(ca) * rad, cy = P.y + Math.sin(ca) * rad;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(ca); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-6, -8); ctx.lineTo(-2, 0); ctx.lineTo(-6, 8); ctx.fill(); ctx.restore();
+      ctx.fillStyle = col; ctx.fillText(label + ' ' + Math.round(dd / 25) + 'm', cx, cy + (Math.sin(ca) > 0 ? 26 : -16));
+    }
+    var best = null, bd = 1e9; exts.forEach(function (x) { var dd = Math.hypot(x.x - P.x, x.y - P.y); if (dd < bd) { bd = dd; best = x; } });
+    if (best) arrow(best, '온천', '#7fd0c4', 104);
+    if (portal) arrow(portal, '차원문', '#b08cff', 150);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (hurtFlash > 0) { ctx.fillStyle = 'rgba(217,85,63,' + (hurtFlash * 1.2) + ')'; ctx.fillRect(0, 0, W, H); }
+    if (!UI.open) {
+      var rx, ry, gg = cur(), k4;
+      if (mouse.used && !sticks.aim) { rx = mouse.x; ry = mouse.y; } else { rx = W / 2 + (P.x - cam.x + Math.cos(P.ang) * 130) * scale; ry = H / 2 + (P.y - 12 - cam.y + Math.sin(P.ang) * 130) * scale; }
+      var rr = 5 + (gg ? DB[gg.id].spread * 110 : 4) * (1 + P.bloom) + P.bloom * 7 + Math.min(1, Math.hypot(P.vx, P.vy) / 175) * 4;
+      ctx.strokeStyle = hitMark > 0 ? (hitKill ? '#ff6a4a' : '#ffffff') : 'rgba(255,236,190,0.92)'; ctx.lineWidth = 2; ctx.beginPath();
+      for (k4 = 0; k4 < 4; k4++) { var ra = k4 * 1.5708; ctx.moveTo(rx + Math.cos(ra) * rr, ry + Math.sin(ra) * rr); ctx.lineTo(rx + Math.cos(ra) * (rr + 7), ry + Math.sin(ra) * (rr + 7)); }
+      if (hitMark > 0) for (k4 = 0; k4 < 4; k4++) { var rb = k4 * 1.5708 + 0.7854, r0 = 5 + (0.14 - hitMark) * 30; ctx.moveTo(rx + Math.cos(rb) * r0, ry + Math.sin(rb) * r0); ctx.lineTo(rx + Math.cos(rb) * (r0 + 6), ry + Math.sin(rb) * (r0 + 6)); }
+      ctx.stroke(); ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(rx - 1, ry - 1, 2, 2);
+    }
+    drawMini();
+    ['move', 'aim'].forEach(function (k) {
+      var s = sticks[k]; if (!s) return;
+      ctx.strokeStyle = 'rgba(236,230,210,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(s.ox, s.oy, 50, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = k === 'aim' ? 'rgba(242,165,49,0.6)' : 'rgba(236,230,210,0.5)'; ctx.beginPath(); ctx.arc(s.ox + s.dx, s.oy + s.dy, 20, 0, 6.2832); ctx.fill();
+    });
+  }
+  function frame(now) {
+    if (state !== 'raid') { draw(); return; }
+    var dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+    update(dt); draw();
+    if (state === 'raid') requestAnimationFrame(frame);
+  }
+  function resize() {
+    var r = cv.getBoundingClientRect(); W = Math.max(200, r.width); H = Math.max(200, r.height);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = fog.width = Math.round(W * dpr); cv.height = fog.height = Math.round(H * dpr);
+    scale = Math.max(0.6, Math.min(1.5, Math.max(W / 920, H / 660)));
+    if (state !== 'raid') draw();
+  }
+
+  /* ---------- input ---------- */
+  function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  cv.addEventListener('pointerdown', function (e) {
+    var p = pos(e);
+    if (e.pointerType === 'touch') { var side = p.x < W / 2 ? 'move' : 'aim'; if (!sticks[side]) sticks[side] = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 }; mouse.used = false; }
+    else { mouse.x = p.x; mouse.y = p.y; mouse.down = true; mouse.used = true; }
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    var p = pos(e);
+    if (e.pointerType === 'touch') ['move', 'aim'].forEach(function (k) { var s = sticks[k]; if (!s || s.id !== e.pointerId) return; var dx = p.x - s.ox, dy = p.y - s.oy, l = Math.hypot(dx, dy); if (l > 50) { dx *= 50 / l; dy *= 50 / l; } s.dx = dx; s.dy = dy; });
+    else { mouse.x = p.x; mouse.y = p.y; mouse.used = true; }
+  });
+  function release(e) { if (e.pointerType === 'touch') ['move', 'aim'].forEach(function (k) { if (sticks[k] && sticks[k].id === e.pointerId) sticks[k] = null; }); else mouse.down = false; }
+  cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+  cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  window.addEventListener('keydown', function (e) {
+    var k = e.key.toLowerCase(); if (state !== 'raid') return;
+    keys[k] = true;
+    if (e.repeat) { if (k === 'tab' || k === ' ') e.preventDefault(); return; }
+    if (k === 'g') doPing(); else if (k === 'r') reloadGun(); else if (k === 'q') quickHeal(); else if (k === 'f' || k === 'e') interact(); else if (k === 't') swapAmmo();
+    else if (k === '1') swapGun('w1'); else if (k === '2') swapGun('w2'); else if (k === 'tab' || k === 'i') toggleBag(); else if (k === ' ') doRoll(); else if (k === 'escape') closeInv();
+    if (k.indexOf('arrow') === 0 || k === ' ' || k === 'tab') e.preventDefault();
+  });
+  window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', function () { keys = {}; mouse.down = false; });
+  document.addEventListener('visibilitychange', function () { last = performance.now(); });
+  $('btnUse').addEventListener('click', interact); $('btnBag').addEventListener('click', toggleBag);
+  $('btnSwap').addEventListener('click', function () { swapGun(); }); $('btnReload').addEventListener('click', reloadGun);
+  $('btnMed').addEventListener('click', quickHeal); $('btnRoll').addEventListener('click', doRoll);
+  $('btnPing').addEventListener('click', doPing);
+  cv.addEventListener('auxclick', function (e) { if (e.button === 1) { e.preventDefault(); doPing(); } });
+  $('btnSnd').addEventListener('click', function () { soundOn = !soundOn; this.textContent = soundOn ? '소리 켬' : '소리 끔'; });
+
+  genMap(0);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+  window.addEventListener('resize', resize);
+  resize(); hud(); renderInv();
+})();
+</script>
+</body>
+</html>

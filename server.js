@@ -425,6 +425,7 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
   '.json': 'application/json; charset=utf-8',
@@ -554,7 +555,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- static ---
-  let filePath = url.pathname === '/' ? '/index.html' : url.pathname;
+  if (url.pathname === '/game') { res.writeHead(302, { Location: '/game/' }); return res.end(); }
+  let filePath = url.pathname.endsWith('/') ? url.pathname + 'index.html' : url.pathname;
   filePath = path.normalize(filePath).replace(/^(\.\.[/\\])+/, '');
   const abs = path.join(PUBLIC_DIR, filePath);
   if (!abs.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
@@ -564,6 +566,9 @@ const server = http.createServer(async (req, res) => {
     res.end(buf);
   });
 });
+
+// 게임(/game/) 협동 멀티 — WebSocket 중계. 수집·API와는 독립적으로 동작한다.
+require('./game-ws').attach(server);
 
 server.listen(PORT, () => {
   console.log(`TrendHub running → http://localhost:${PORT}`);
