@@ -1420,6 +1420,7 @@ button.cell:active { transform: scale(0.95); }
   cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
   cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   // 글자가 아니라 자판 위치로 읽는다 — 한글 입력 상태(ㅈㅁㄴㅇ)나 CapsLock에서도 WASD가 그대로 동작
+  var KO = { 'ㅈ': 'w', 'ㅁ': 'a', 'ㄴ': 's', 'ㅇ': 'd', 'ㄹ': 'f', 'ㄷ': 'e', 'ㄱ': 'r', 'ㅂ': 'q', 'ㅎ': 'g', 'ㅅ': 't', 'ㅑ': 'i', 'ㅉ': 'w', 'ㄸ': 'e', 'ㄲ': 'r', 'ㅃ': 'q', 'ㅆ': 't' };
   function keyOf(e) {
     var c = e.code || '';
     if (c.indexOf('Key') === 0 && c.length === 4) return c.charAt(3).toLowerCase();
@@ -1427,7 +1428,8 @@ button.cell:active { transform: scale(0.95); }
     if (c === 'Space') return ' ';
     if (c === 'ShiftLeft' || c === 'ShiftRight') return 'shift';
     if (c) return c.toLowerCase();
-    return (e.key || '').toLowerCase();
+    var k = (e.key || '').toLowerCase(); // code가 비는 환경(일부 IME·원격 키보드) 대비: 두벌식 자모 → 영문 자리
+    return KO[k] || k;
   }
   window.addEventListener('keydown', function (e) {
     var k = keyOf(e); if (state !== 'raid') return;
