@@ -125,7 +125,7 @@ button.cell:active { transform: scale(0.95); }
     <button id="btnSwap" type="button">교체 1/2</button>
     <button id="btnReload" type="button">장전 R</button>
     <button id="btnMed" type="button">치료 Q</button>
-    <button id="btnRoll" type="button">구르기</button>
+    <button id="btnRoll" type="button">구르기 Space</button>
     <button id="btnPing" type="button">핑 G</button>
     <button id="btnSnd" type="button">소리 켬</button>
   </div>
@@ -570,7 +570,7 @@ button.cell:active { transform: scale(0.95); }
       var lv = save.fac[f.k], max = lv >= f.max, c = max ? 0 : f.cost[lv];
       h += '<div class="row"><div>' + f.n + ' <small>' + f.d + ' · ' + lv + '/' + f.max + '단계</small></div><button type="button" data-fac="' + f.k + '"' + (max || save.money < c ? ' disabled' : '') + '>' + (max ? '최대' : c + '냥') + '</button></div>';
     });
-    return h + '</div><p class="keys">협동: F로 쓰러진 동료 일으키기 · G(가운데 클릭)로 위치 표시 · 물건을 버리면 동료가 주울 수 있습니다.<br>차원문(보라색)은 더 위험하고 보상이 좋은 다음 구역으로 이어집니다.<br>이동 WASD · 달리기 Shift · 구르기 Space · 사격 클릭 · 장전 R · 탄종 교체 T · 치료 Q · 열기 F · 가방 Tab · 무기 교체 1/2<br>터치: 왼쪽 화면 이동, 오른쪽 화면 조준(끝까지 밀면 사격), 나머지는 위쪽 버튼</p></section>';
+    return h + '</div><p class="keys">협동: F로 쓰러진 동료 일으키기 · G(가운데 클릭)로 위치 표시 · 물건을 버리면 동료가 주울 수 있습니다.<br>차원문(보라색)은 더 위험하고 보상이 좋은 다음 구역으로 이어집니다.<br>이동 WASD · 달리기 Shift · 구르기 Space · 사격 클릭(누르고 있으면 연사) · 장전 R · 탄종 교체 T · 치료 Q · 열기 F · 가방 Tab · 무기 교체 1/2<br>터치: 왼쪽 화면 이동, 오른쪽 화면 조준(끝까지 밀면 사격), 나머지는 위쪽 버튼</p></section>';
   }
   function renderInv() {
     var base = state !== 'raid', h = '', ol = otherList(), i;
@@ -879,7 +879,7 @@ button.cell:active { transform: scale(0.95); }
     if (!b.touched && (b.kind === 'crate' || b.kind === 'wcase' || b.kind === 'med' || b.kind === 'boss' || b.kind === 'elite')) { b.touched = 1; inc('open'); }
     UI.other = b; UI.sel = null; renderInv(); sfx('click');
   }
-  function nearBox() { var best = null, bd = 54; boxes.forEach(function (b) { var d = Math.hypot(b.x - P.x, b.y - P.y); if (d < bd) { bd = d; best = b; } }); return best; }
+  function nearBox() { var best = null, bd = 76; boxes.forEach(function (b) { var d = Math.hypot(b.x - P.x, b.y - P.y); if (d < bd) { bd = d; best = b; } }); return best; }
   function toggleBag() { if (state !== 'raid') return; if (UI.open) closeInv(); else { UI.other = null; UI.sel = null; renderInv(); } }
 
   function hurt(dmg, pen) {
@@ -989,7 +989,7 @@ button.cell:active { transform: scale(0.95); }
     if (P.reload > 0 && g) {
       P.reload -= dt;
       if (P.reload <= 0) { P.reload = 0; var need = Math.min(gd.mag - g.mag, countAmmo(g.am)); g.mag += need; takeAmmo(g.am, need); }
-    } else if (firing && g && P.cool <= 0 && P.roll <= 0 && !P.heal && (gd.auto || mouse.fresh || sticks.aim)) {
+    } else if (firing && g && P.cool <= 0 && P.roll <= 0 && !P.heal) {
       mouse.fresh = false;
       if (g.mag > 0) {
         g.mag--; P.cool = gd.rate;
@@ -1419,17 +1419,29 @@ button.cell:active { transform: scale(0.95); }
   function release(e) { if (e.pointerType === 'touch') ['move', 'aim'].forEach(function (k) { if (sticks[k] && sticks[k].id === e.pointerId) sticks[k] = null; }); else mouse.down = false; }
   cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
   cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  // 글자가 아니라 자판 위치로 읽는다 — 한글 입력 상태(ㅈㅁㄴㅇ)나 CapsLock에서도 WASD가 그대로 동작
+  function keyOf(e) {
+    var c = e.code || '';
+    if (c.indexOf('Key') === 0 && c.length === 4) return c.charAt(3).toLowerCase();
+    if (c.indexOf('Digit') === 0 && c.length === 6) return c.charAt(5);
+    if (c === 'Space') return ' ';
+    if (c === 'ShiftLeft' || c === 'ShiftRight') return 'shift';
+    if (c) return c.toLowerCase();
+    return (e.key || '').toLowerCase();
+  }
   window.addEventListener('keydown', function (e) {
-    var k = e.key.toLowerCase(); if (state !== 'raid') return;
+    var k = keyOf(e); if (state !== 'raid') return;
     keys[k] = true;
     if (e.repeat) { if (k === 'tab' || k === ' ') e.preventDefault(); return; }
     if (k === 'g') doPing(); else if (k === 'r') reloadGun(); else if (k === 'q') quickHeal(); else if (k === 'f' || k === 'e') interact(); else if (k === 't') swapAmmo();
     else if (k === '1') swapGun('w1'); else if (k === '2') swapGun('w2'); else if (k === 'tab' || k === 'i') toggleBag(); else if (k === ' ') doRoll(); else if (k === 'escape') closeInv();
     if (k.indexOf('arrow') === 0 || k === ' ' || k === 'tab') e.preventDefault();
   });
-  window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('keyup', function (e) { var k = keyOf(e); keys[k] = false; if (k === ' ' && state === 'raid') e.preventDefault(); });
   window.addEventListener('blur', function () { keys = {}; mouse.down = false; });
   document.addEventListener('visibilitychange', function () { last = performance.now(); });
+  // 버튼이 포커스를 가져가면 이후 Space(구르기)가 그 버튼을 다시 눌러 버린다 — 포커스를 주지 않는다
+  document.querySelector('.acts').addEventListener('mousedown', function (e) { e.preventDefault(); });
   $('btnUse').addEventListener('click', interact); $('btnBag').addEventListener('click', toggleBag);
   $('btnSwap').addEventListener('click', function () { swapGun(); }); $('btnReload').addEventListener('click', reloadGun);
   $('btnMed').addEventListener('click', quickHeal); $('btnRoll').addEventListener('click', doRoll);
