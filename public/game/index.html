@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#14170f">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>카피바라 온천 귀환</title>
@@ -19,7 +19,9 @@
   --display: "Do Hyeon", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
-html, body { height: 100%; }
+html, body { height: 100%; overscroll-behavior: none; }
+body { height: 100dvh; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+input { -webkit-user-select: text; user-select: text; }
 body {
   background: var(--soil); color: var(--text); font-family: var(--body); font-size: 14px;
   display: flex; flex-direction: column; gap: 8px; padding-block: 10px;
@@ -104,6 +106,32 @@ div.cell { color: var(--muted); font-size: 11px; justify-content: center; text-a
 .cell { transition: transform 0.1s ease-out, border-color 0.1s; }
 button.cell:hover { transform: translateY(-2px); }
 button.cell:active { transform: scale(0.95); }
+/* ---- 터치 기기: 화면 위 조작 버튼, 좁은 화면용 HUD ---- */
+.pad { display: none; }
+body.touch.raid .pad { display: grid; position: absolute; z-index: 1; gap: 10px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); touch-action: none; }
+.pad.r { right: 10px; grid-template-columns: repeat(2, 58px); }
+.pad.l { left: 10px; grid-template-columns: 58px; }
+.pad button { width: 58px; height: 58px; padding: 0; border-radius: 50%; font-size: 13px; line-height: 1.15; background: rgba(31,36,24,0.62); border: 1.5px solid rgba(236,230,210,0.38); color: var(--text); touch-action: none; }
+.pad button small { display: block; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pad button.dn { background: rgba(242,165,49,0.5); transform: scale(0.94); }
+.pad button.hot { border-color: var(--yuzu); background: rgba(242,165,49,0.3); color: #fff; box-shadow: 0 0 0 3px rgba(242,165,49,0.25); }
+body.touch .acts button:not(#btnSnd):not(#btnPing) { display: none; }
+body.touch .hud h1 { display: none; }
+body.touch { padding-block: 6px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+body.touch .hud { gap: 4px 10px; font-size: 12px; }
+body.touch .acts button { padding: 4px 9px; }
+body.touch .inv { padding: 10px 10px 0; touch-action: pan-y; overscroll-behavior: contain; }
+body.touch .inv button { min-height: 40px; }
+body.touch .inv button.cell { min-height: 0; }
+body.touch .detail { margin: 0 -10px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+body.touch .detail .btns button { min-height: 44px; padding: 8px 14px; font-size: 15px; }
+body.touch .inv-h h2 { font-size: 22px; }
+body.touch .cols { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+body.touch .grid { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+body.touch .keys .pc { display: none; }
+body.touch button.cell:hover { transform: none; }
+@media (max-height: 460px) { body.touch .stat.opt { display: none; } .pad.r, .pad.l { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); } }
+.hint { color: var(--muted); font-size: 12px; margin: 0; }
 @media (prefers-reduced-motion: reduce) { .inv, .toast { animation: none; } .bar i, .cell { transition: none; } }
 </style>
 
@@ -115,9 +143,9 @@ button.cell:active { transform: scale(0.95); }
     <div class="bar" aria-label="체력"><i id="hpFill"></i></div>
     <div class="bar thin" aria-label="기력"><i id="stFill"></i></div>
   </div>
-  <span class="stat">방어 <b id="armor">-</b></span>
+  <span class="stat opt">방어 <b id="armor">-</b></span>
   <span class="stat"><b id="gun">-</b></span>
-  <span class="stat">무게 <b id="wt">-</b></span>
+  <span class="stat opt">무게 <b id="wt">-</b></span>
   <span class="stat">시간 <b id="clock">0:00</b></span>
   <div class="acts">
     <button id="btnUse" type="button">열기 F</button>
@@ -133,6 +161,16 @@ button.cell:active { transform: scale(0.95); }
 
 <div class="stage">
   <canvas id="cv" aria-label="작전 지도"></canvas>
+  <div class="pad l" id="padL">
+    <button type="button" data-pad="bag">가방</button>
+    <button type="button" data-pad="swap">무기<small>교체</small></button>
+  </div>
+  <div class="pad r" id="padR">
+    <button type="button" data-pad="use" id="padUse">열기</button>
+    <button type="button" data-pad="med">치료<small id="padMed"></small></button>
+    <button type="button" data-pad="reload">장전<small id="padAmmo"></small></button>
+    <button type="button" data-pad="roll">구르기</button>
+  </div>
   <div class="toast" id="toast" hidden></div>
   <div class="inv" id="inv"></div>
 </div>
@@ -475,6 +513,26 @@ button.cell:active { transform: scale(0.95); }
     if (base) persist();
     renderInv(); hud();
   }
+  var lastTap = { key: '', t: 0 };
+  function quickAct() {
+    var s = UI.sel, it = getSel(); if (!s || !it) return '';
+    var d = DB[it.id], base = state !== 'raid', shop = base && UI.tab === 'shop', ol = otherList(), eqp = d.t === 'gun' || d.t === 'armor' || d.t === 'helmet' || d.t === 'pack';
+    var netBox = NET.on && !base && UI.other && UI.other.id;
+    if (s.src === 'other') return shop ? '' : 'take';          // 상자·창고 → 가방 (상점은 실수 구매 방지로 제외)
+    if (s.src === 'eq') return 'unequip';                       // 장비 → 가방
+    if (ol && !shop && !netBox) return 'move';                  // 가방 → 창고·상자
+    if (eqp) return 'equip';
+    if (d.t === 'med' && !base) return 'use';
+    return '';
+  }
+  function takeAll() {
+    var b = UI.other; if (state !== 'raid' || !b) return;
+    var n = 0, full = false, i;
+    if (NET.on && b.id) { for (i = 0; i < Math.min(b.rev, b.items.length); i++) { if (canFit(b.items[i])) { send({ t: 'take', b: b.id, u: b.items[i].u }); n++; } else full = true; } }
+    else for (i = 0; i < Math.min(b.rev, b.items.length);) { if (addList(save.bag, bagCap(), b.items[i])) { b.items.splice(i, 1); b.rev--; n++; } else { full = true; i++; } }
+    if (n) sfx('pick'); if (full) toast('가방이 가득 차서 일부는 남겼습니다.'); else if (!n) toast('가져갈 것이 없습니다.');
+    UI.sel = null; renderInv(); hud();
+  }
   function repairCost(it) { var d = DB[it.id]; return Math.ceil(d.price * 0.4 * (1 - it.dur / d.dur)); }
 
   /* ---------- inventory / camp UI ---------- */
@@ -496,7 +554,7 @@ button.cell:active { transform: scale(0.95); }
   }
   function detailHtml() {
     var it = getSel(), s = UI.sel, base = state !== 'raid', shop = base && UI.tab === 'shop', ol = otherList(), b = '';
-    if (!it) return '<div class="detail"><div class="info"><small>' + (base ? '물건을 눌러 장착·이동·판매하세요.' : '물건을 눌러 가져가거나 장착하세요.') + '</small></div></div>';
+    if (!it) return '<div class="detail"><div class="info"><small>' + (base ? '물건을 눌러 장착·이동·판매하세요. 두 번 누르면 바로 창고↔가방으로 옮깁니다.' : '물건을 눌러 가져가거나 장착하세요. 두 번 누르면 바로 넣고 뺍니다.') + '</small></div></div>';
     var d = DB[it.id], eqp = d.t === 'gun' || d.t === 'armor' || d.t === 'helmet' || d.t === 'pack';
     function bt(a, l) { b += '<button type="button" data-act="' + a + '">' + l + '</button>'; }
     if (s.src === 'other') {
@@ -570,7 +628,7 @@ button.cell:active { transform: scale(0.95); }
       var lv = save.fac[f.k], max = lv >= f.max, c = max ? 0 : f.cost[lv];
       h += '<div class="row"><div>' + f.n + ' <small>' + f.d + ' · ' + lv + '/' + f.max + '단계</small></div><button type="button" data-fac="' + f.k + '"' + (max || save.money < c ? ' disabled' : '') + '>' + (max ? '최대' : c + '냥') + '</button></div>';
     });
-    return h + '</div><p class="keys">협동: F로 쓰러진 동료 일으키기 · G(가운데 클릭)로 위치 표시 · 물건을 버리면 동료가 주울 수 있습니다.<br>차원문(보라색)은 더 위험하고 보상이 좋은 다음 구역으로 이어집니다.<br>이동 WASD · 달리기 Shift · 구르기 Space · 사격 클릭(누르고 있으면 연사) · 장전 R · 탄종 교체 T · 치료 Q · 열기 F · 가방 Tab · 무기 교체 1/2<br>터치: 왼쪽 화면 이동, 오른쪽 화면 조준(끝까지 밀면 사격), 나머지는 위쪽 버튼</p></section>';
+    return h + '</div><p class="keys">협동: F로 쓰러진 동료 일으키기 · G(가운데 클릭)로 위치 표시 · 물건을 버리면 동료가 주울 수 있습니다.<br>차원문(보라색)은 더 위험하고 보상이 좋은 다음 구역으로 이어집니다.<span class="pc"><br>이동 WASD · 달리기 Shift · 구르기 Space · 사격 클릭(누르고 있으면 연사) · 장전 R · 탄종 교체 T · 치료 Q · 열기 F · 가방 Tab · 무기 교체 1/2</span><br>터치: 왼쪽 화면을 밀어 이동(끝까지 밀면 달리기), 오른쪽 화면을 밀어 조준·사격, 나머지는 화면 양옆 버튼<br>물건은 두 번 눌러(더블클릭·더블탭) 바로 넣고 뺄 수 있습니다.</p></section>';
   }
   function renderInv() {
     var base = state !== 'raid', h = '', ol = otherList(), i;
@@ -581,7 +639,7 @@ button.cell:active { transform: scale(0.95); }
       if (UI.report) h += UI.report;
       if (save.corpse) h += '<div class="report lost">' + ((save.corpse.zone || 0) + 1) + '구역의 쓰러진 자리에 장비 ' + save.corpse.items.length + '개가 남아 있습니다. 다시 쓰러지기 전에 회수하세요.</div>';
       h += '<div class="tabs">' + [['stash', '창고'], ['shop', '상점'], ['fac', '시설'], ['quest', '의뢰']].map(function (t) { return '<button type="button" data-tab="' + t[0] + '"' + (UI.tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join('') + '</div>';
-    } else h += '<div class="inv-h"><h2>' + (UI.other ? UI.other.title : '소지품') + '</h2><span class="sp"></span><button type="button" data-act="close">닫기</button></div>';
+    } else h += '<div class="inv-h"><h2>' + (UI.other ? UI.other.title : '소지품') + '</h2><span class="sp"></span>' + (UI.other ? '<button type="button" data-all="1">모두 가져가기</button>' : '') + '<button type="button" data-act="close">닫기</button></div>';
     h += '<div class="cols">';
     if (base && UI.tab === 'fac') h += facHtml();
     else if (base && UI.tab === 'quest') h += questHtml();
@@ -618,7 +676,15 @@ button.cell:active { transform: scale(0.95); }
     if (t.dataset.shop) { UI.shop = t.dataset.shop; UI.sel = null; shopCache = null; return renderInv(); }
     if (t.dataset.modadd) return modAct(true, t.dataset.modadd);
     if (t.dataset.moddel) return modAct(false, t.dataset.moddel);
-    if (t.dataset.src) { UI.sel = { src: t.dataset.src, k: t.dataset.src === 'eq' ? t.dataset.k : +t.dataset.k }; return renderInv(); }
+    if (t.dataset.src) {
+      // 같은 칸을 빠르게 두 번 누르면(더블클릭·더블탭) 바로 옮긴다
+      var now = Date.now(), key = t.dataset.src + ':' + t.dataset.k, dbl = lastTap.key === key && now - lastTap.t < 380;
+      lastTap = { key: dbl ? '' : key, t: now };
+      UI.sel = { src: t.dataset.src, k: t.dataset.src === 'eq' ? t.dataset.k : +t.dataset.k };
+      if (dbl) { var qa = quickAct(); if (qa) return doAct(qa); }
+      return renderInv();
+    }
+    if (t.dataset.all) return takeAll();
     if (t.dataset.fac) { var f = FAC.filter(function (x) { return x.k === t.dataset.fac; })[0], c = f.cost[save.fac[f.k]]; if (save.money >= c) { save.money -= c; save.fac[f.k]++; shopCache = null; persist(); renderInv(); } return; }
     if (t.dataset.quest) {
       var c = +t.dataset.quest, q = QCH[c][save.qs[c]]; if (!q) return;
@@ -790,7 +856,7 @@ button.cell:active { transform: scale(0.95); }
     if (!save.eq.w1 && !save.eq.w2) { save.eq.w1 = mk('pistol'); addList(save.bag, bagCap() + 1, mk('a_light', 24)); }
     var hpMax = 100 + save.fac.gym * 12, stMax = 100 + save.fac.gym * 10;
     P = { x: 0, y: 0, r: 14, ang: -0.6, hp: hpMax, max: hpMax, st: stMax, stMax: stMax, stWait: 0, act: save.eq.w1 ? 'w1' : 'w2', cool: 0, reload: 0, walk: 0, roll: 0, rx: 0, ry: 0, heal: null, kills: 0, vx: 0, vy: 0, face: 1, kick: 0, bloom: 0, flash: 0, land: 0, view: -0.6, step: 0, swapT: 0, trail: 0 };
-    clock = 0; state = 'raid'; UI.report = '';
+    clock = 0; state = 'raid'; document.body.classList.add('raid'); UI.report = '';
     enterZone(0);
     last = performance.now(); requestAnimationFrame(frame);
   }
@@ -953,7 +1019,7 @@ button.cell:active { transform: scale(0.95); }
       }
     }
     var ml = Math.hypot(mx, my); if (ml > 1) { mx /= ml; my /= ml; ml = 1; }
-    var over = weight() > carryCap(), sprint = keys.shift && ml > 0.1 && P.st > 0 && !over && !P.heal;
+    var over = weight() > carryCap(), sprint = (keys.shift || (sticks.move && Math.hypot(sticks.move.dx, sticks.move.dy) > 44)) && ml > 0.1 && P.st > 0 && !over && !P.heal;
     var sp = 175 * (over ? 0.55 : 1) * (sprint ? 1.45 : 1) * (P.heal ? 0.55 : 1);
     if (P.roll > 0) {
       var rs = 300 + 520 * (P.roll / 0.36); P.roll -= dt; moveEnt(P, P.rx * rs * dt, P.ry * rs * dt); P.vx = P.rx * rs; P.vy = P.ry * rs;
@@ -971,7 +1037,7 @@ button.cell:active { transform: scale(0.95); }
     else if (P.stWait > 0) P.stWait -= dt; else P.st = Math.min(P.stMax, P.st + 18 * dt);
 
     var firing = mouse.down && !UI.open && !P.down;
-    if (sticks.aim) { var al = Math.hypot(sticks.aim.dx, sticks.aim.dy); if (al > 8) P.ang = Math.atan2(sticks.aim.dy, sticks.aim.dx); firing = al > 26 && !UI.open && !P.down; }
+    if (sticks.aim) { var al = Math.hypot(sticks.aim.dx, sticks.aim.dy); if (al > 8) { var aa = Math.atan2(sticks.aim.dy, sticks.aim.dx), bestA = null, bestD = 0.3; for (var ai = 0; ai < enemies.length; ai++) { var ae = enemies[ai], ad = Math.hypot(ae.x - P.x, ae.y - P.y); if (ad > 560 || ad < 20) continue; var df = Math.abs(angDiff(Math.atan2(ae.y - 8 - P.y, ae.x - P.x), aa)); if (df < bestD) { bestD = df; bestA = Math.atan2(ae.y - 8 - (P.y - 12), ae.x - P.x); } } P.ang = bestA === null ? aa : aa + angDiff(bestA, aa) * 0.7; } firing = al > 22 && !UI.open && !P.down; }
     else if (mouse.used) P.ang = Math.atan2(cam.y + (mouse.y - H / 2) / scale - P.y, cam.x + (mouse.x - W / 2) / scale - P.x);
     else if (ml > 0.1) P.ang = Math.atan2(my, mx);
     P.view += angDiff(P.ang, P.view) * Math.min(1, dt * 16);
@@ -1114,7 +1180,7 @@ button.cell:active { transform: scale(0.95); }
   function finish(win) {
     if (NET.on) { send({ t: 'ev', k: 'msg', s: win ? '님이 온천으로 귀환했습니다.' : '님이 쓰러져 야영지로 돌아갔습니다.' }); send({ t: 'zone', z: -1 }); }
     R = {}; NET.wait = false;
-    state = 'base'; save.raids++;
+    state = 'base'; document.body.classList.remove('raid'); save.raids++;
     var all = carried(), val = 0; all.forEach(function (i) { val += sellOf(i); });
     if (win) {
       inc('wins'); if (zone === 1) inc('w2'); if (zone === 2) inc('w3');
@@ -1139,6 +1205,7 @@ button.cell:active { transform: scale(0.95); }
     $('armor').textContent = (a ? Math.round(a.dur) : 0) + ' / ' + (h ? Math.round(h.dur) : 0);
     $('gun').textContent = g ? DB[g.id].n + ' ' + (P && P.reload ? '장전 중' : g.mag + '/' + countAmmo(g.am)) + (DB[g.am].pen > 0.3 ? ' 철갑' : '') : '무기 없음';
     $('wt').textContent = weight().toFixed(1) + '/' + carryCap() + 'kg';
+    if (TOUCH) { var meds = 0; save.bag.forEach(function (x) { if (x.id === 'bandage' || x.id === 'medkit') meds += x.q || 1; }); $('padMed').textContent = meds ? '×' + meds : '없음'; $('padAmmo').textContent = g ? g.mag + '/' + countAmmo(g.am) : ''; }
     $('clock').textContent = (state === 'raid' ? (zone + 1) + '구역 ' : '') + Math.floor(clock / 60) + ':' + ('0' + Math.floor(clock % 60)).slice(-2);
   }
 
@@ -1281,7 +1348,7 @@ button.cell:active { transform: scale(0.95); }
     }
   }
   function drawMini() {
-    var s = Math.min(2.6, (W * 0.3) / MW), mw = MW * s, mh = MH * s, ox = W - mw - 10, oy = 10, i;
+    var s = Math.min(2.6, (W * 0.3) / MW, TOUCH ? Math.max(H * 0.27 - 22, 54) / MH : 9), mw = MW * s, mh = MH * s, ox = W - mw - 10, oy = 10, i;
     ctx.fillStyle = 'rgba(14,16,10,0.7)'; ctx.fillRect(ox - 3, oy - 3, mw + 6, mh + 6);
     for (var ty = 0; ty < MH; ty++) for (var tx = 0; tx < MW; tx++) {
       var k = idx(tx, ty); if (!seen[k]) continue;
@@ -1351,7 +1418,8 @@ button.cell:active { transform: scale(0.95); }
       ctx.fillStyle = pg.c; ctx.beginPath(); ctx.arc(pg.x, pg.y, 5, 0, 6.2832); ctx.fill(); if (pg.n) ctx.fillText(pg.n, pg.x, pg.y - 22); ctx.globalAlpha = 1;
     }
     var nb = UI.open ? null : nearBox();
-    if (nb) { ctx.fillStyle = '#10130c'; ctx.fillText('F ' + nb.title, nb.x + 1, nb.y - 37); ctx.fillStyle = '#f2a531'; ctx.fillText('F ' + nb.title, nb.x, nb.y - 38); }
+    if (nb) { var nl = (TOUCH ? '' : 'F ') + nb.title; ctx.fillStyle = '#10130c'; ctx.fillText(nl, nb.x + 1, nb.y - 37); ctx.fillStyle = '#f2a531'; ctx.fillText(nl, nb.x, nb.y - 38); }
+    if (TOUCH) { var hot = !!nb; if (!hot) for (var hk in R) if (R[hk].down && Math.hypot(R[hk].x - P.x, R[hk].y - P.y) < 60) hot = true; if (hot !== padHot) { padHot = hot; $('padUse').classList.toggle('hot', hot); $('padUse').textContent = nb ? '열기' : hot ? '일으키기' : '열기'; } }
     function ring(t, max, c, label) { ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(P.x, P.y - 8, 30, 0, 6.2832); ctx.stroke(); ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(P.x, P.y - 8, 30, -1.5708, -1.5708 + t / max * 6.2832); ctx.stroke(); ctx.fillStyle = '#ece6d2'; ctx.fillText(label, P.x, P.y - 48); }
     if (P.down > 0) ring(P.down, 25, '#ff8566', '기절 · 동료를 기다리는 중 ' + Math.ceil(P.down));
     else if (P.rev) ring(P.rev.t, 2.5, '#8fb85a', '일으키는 중');
@@ -1385,6 +1453,7 @@ button.cell:active { transform: scale(0.95); }
     ['move', 'aim'].forEach(function (k) {
       var s = sticks[k]; if (!s) return;
       ctx.strokeStyle = 'rgba(236,230,210,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(s.ox, s.oy, 50, 0, 6.2832); ctx.stroke();
+      if (k === 'aim') { ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(242,165,49,0.45)'; ctx.beginPath(); ctx.arc(s.ox, s.oy, 22, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = k === 'aim' ? 'rgba(242,165,49,0.6)' : 'rgba(236,230,210,0.5)'; ctx.beginPath(); ctx.arc(s.ox + s.dx, s.oy + s.dy, 20, 0, 6.2832); ctx.fill();
     });
   }
@@ -1398,11 +1467,22 @@ button.cell:active { transform: scale(0.95); }
     var r = cv.getBoundingClientRect(); W = Math.max(200, r.width); H = Math.max(200, r.height);
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     cv.width = fog.width = Math.round(W * dpr); cv.height = fog.height = Math.round(H * dpr);
-    scale = Math.max(0.6, Math.min(1.5, Math.max(W / 920, H / 660)));
+    scale = Math.min(W, H) < 520 ? Math.max(0.55, Math.min(1, Math.sqrt(W * H / (920 * 660)) * 1.08)) : Math.max(0.6, Math.min(1.5, Math.max(W / 920, H / 660)));
     if (state !== 'raid') draw();
   }
 
   /* ---------- input ---------- */
+  var TOUCH = false, padHot = false;
+  function setTouch() { if (TOUCH) return; TOUCH = true; document.body.classList.add('touch'); resize(); }
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches) TOUCH = true, document.body.classList.add('touch');
+  window.addEventListener('touchstart', setTouch, { passive: true });
+  var PADS = { use: function () { interact(); }, bag: function () { toggleBag(); }, swap: function () { swapGun(); }, reload: function () { reloadGun(); }, med: function () { quickHeal(); }, roll: function () { doRoll(); } };
+  ['padL', 'padR'].forEach(function (id) {
+    var el = $(id);
+    el.addEventListener('pointerdown', function (e) { var b = e.target.closest('button'); e.preventDefault(); if (!b) return; b.classList.add('dn'); setTimeout(function () { b.classList.remove('dn'); }, 130); PADS[b.dataset.pad](); });
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
   cv.addEventListener('pointerdown', function (e) {
     var p = pos(e);
